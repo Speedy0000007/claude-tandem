@@ -7,7 +7,14 @@ MIN_LENGTH=${TANDEM_CLARIFY_MIN_LENGTH:-200}
 
 # Wrap everything so no error can leak
 {
-  command -v jq &>/dev/null || exit 0
+  # Check dependencies with helpful error messages
+  if ! command -v jq &>/dev/null; then
+    echo "[Tandem Clarify] Error: jq not found" >&2
+    echo "  Tandem requires jq for JSON parsing." >&2
+    echo "  Install: brew install jq (macOS) | apt install jq (Linux)" >&2
+    echo "  Verify: jq --version" >&2
+    exit 0
+  fi
 
   INPUT=$(cat)
   PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty' 2>/dev/null)
@@ -16,6 +23,15 @@ MIN_LENGTH=${TANDEM_CLARIFY_MIN_LENGTH:-200}
   [ -z "$PROMPT" ] && exit 0
   LENGTH=${#PROMPT}
   [ "$LENGTH" -lt "$MIN_LENGTH" ] && exit 0
+
+  # Check claude CLI is available
+  if ! command -v claude &>/dev/null; then
+    echo "[Tandem Clarify] Error: claude CLI not found" >&2
+    echo "  Clarify requires the Claude CLI for prompt assessment." >&2
+    echo "  The CLI is installed with Claude Code - check your PATH." >&2
+    echo "  Verify: which claude" >&2
+    exit 0
+  fi
 
   # Stage 2: haiku assessment + restructuring
   HAIKU_PROMPT="Assess the following user prompt for quality issues: unclear intent, poor grammar/spelling, stream-of-consciousness style, or missing structure.

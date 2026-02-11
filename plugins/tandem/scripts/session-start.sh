@@ -2,7 +2,13 @@
 # SessionStart hook: first-run provisioning + stale progress detection + status indicators.
 # Outputs to stdout are injected into Claude's context.
 
-command -v jq &>/dev/null || { echo "[Tandem] Error: jq required but not found" >&2; exit 0; }
+if ! command -v jq &>/dev/null; then
+  echo "[Tandem] Error: jq not found" >&2
+  echo "  Tandem requires jq for JSON parsing." >&2
+  echo "  Install: brew install jq (macOS) | apt install jq (Linux)" >&2
+  echo "  Verify: jq --version" >&2
+  exit 0
+fi
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}"
 

@@ -4,7 +4,13 @@
 # Only captures PROGRESS if progress.md is stale/missing (safety net).
 # Outputs nothing to stdout — writes directly to progress.md.
 
-command -v jq &>/dev/null || exit 0
+if ! command -v jq &>/dev/null; then
+  echo "[Tandem] Error: jq not found" >&2
+  echo "  Tandem requires jq for JSON parsing." >&2
+  echo "  Install: brew install jq (macOS) | apt install jq (Linux)" >&2
+  echo "  Verify: jq --version" >&2
+  exit 0
+fi
 
 # Read hook input from stdin
 INPUT=$(cat)
@@ -61,12 +67,18 @@ ${TRANSCRIPT_TAIL}
 
 # Call haiku
 if ! command -v claude &>/dev/null; then
+  echo "[Tandem] Warning: claude CLI not found, skipping pre-compaction state capture" >&2
+  echo "  The CLI is installed with Claude Code - check your PATH." >&2
+  echo "  Verify: which claude" >&2
   exit 0
 fi
 
 RESULT=$(echo "$PROMPT" | claude -p --model haiku --max-budget-usd 0.03 2>/dev/null)
 
 if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
+  echo "[Tandem] Warning: pre-compaction state capture failed" >&2
+  echo "  This may be due to network issues or API limits." >&2
+  echo "  Post-compaction recovery may be limited." >&2
   exit 0
 fi
 

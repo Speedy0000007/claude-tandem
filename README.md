@@ -1,22 +1,47 @@
-# Tandem
+<p align="center">
+  <img src="assets/logo.png" alt="Tandem logo" width="320">
+</p>
 
-**Compound learning for Claude Code — every session makes the next one better.**
+<h1 align="center">Tandem</h1>
 
-Claude gets sharper. You get smarter.
+<p align="center">
+  <strong>Compound learning for Claude Code — every session makes the next one better.</strong>
+</p>
+
+<p align="center">
+  <sub>Claude gets sharper. You get smarter.</sub>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/version-v1.1.0-green.svg" alt="Version: v1.1.0">
+  <img src="https://img.shields.io/badge/platform-Claude%20Code-blueviolet.svg" alt="Platform: Claude Code">
+  <img src="https://img.shields.io/badge/shell-bash-orange.svg" alt="Shell: bash">
+</p>
+
+---
 
 ## What it does
 
-Tandem is a Claude Code plugin with three pillars:
+Tandem is a Claude Code plugin with three features:
 
-| Pillar | What it does | Invocation |
-|--------|-------------|------------|
-| **Clarify** | Restructures messy, dictated, or stream-of-consciousness input into well-formed prompts — then executes immediately | Auto-detects, or `/tandem:clarify` |
-| **Recall** | Keeps your agent's memory sharp — compacts MEMORY.md to stay under 200 lines, maintains a session bridge (progress.md), and surfaces patterns for promotion to CLAUDE.md | Automatic (hooks) |
-| **Grow** | Teaches you as you work — captures technical concepts, builds a searchable learning profile, and identifies high-impact skill gaps | `/tandem:grow` |
+<table>
+  <tr>
+    <td align="center" width="33%"><strong>Clarify</strong><br>Restructures messy input into well-formed prompts — then executes immediately</td>
+    <td align="center" width="33%"><strong>Recall</strong><br>Keeps your agent's memory sharp across sessions, compactions, and projects</td>
+    <td align="center" width="33%"><strong>Grow</strong><br>Teaches you as you work — captures concepts and identifies skill gaps</td>
+  </tr>
+</table>
 
-Each pillar is independently valuable. Combined, they compound — better input leads to a smarter agent, which produces richer learning, which makes you more effective at directing the next session.
+Each feature is independently valuable. Combined, they compound — better input leads to a smarter agent, which produces richer learning, which makes you more effective at directing the next session.
+
+---
 
 ## Install
+
+See [INSTALL.md](INSTALL.md) for detailed setup instructions.
+
+**Quick start:**
 
 ```bash
 # Add the marketplace
@@ -28,7 +53,27 @@ Each pillar is independently valuable. Combined, they compound — better input 
 
 First session after install auto-provisions rules files and profile directory. Run `/tandem:status` to verify.
 
-## Pillars
+**Documentation:**
+- [INSTALL.md](INSTALL.md) — detailed installation and setup
+- [CONFIGURATION.md](CONFIGURATION.md) — configuration options and customization
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — common issues and solutions
+
+---
+
+## Philosophy: enhance, never replace
+
+Claude Code already has auto-memory, MEMORY.md, context compaction, and a hook system. Tandem doesn't build parallel infrastructure — it makes the native systems work better.
+
+- **Auto-memory writes MEMORY.md.** Tandem compacts it to stay under the 200-line loading limit.
+- **Claude Code has no cross-project awareness.** Tandem adds a lightweight rolling log so sessions in one repo know what you've been doing elsewhere.
+- **Claude Code has no session bridge.** Tandem adds progress.md alongside MEMORY.md — same directory, same conventions.
+- **Rules files, hooks, skills** — all use Claude Code's native plugin system. No MCP servers, no background processes, no databases.
+
+If Claude Code ships a native version of something Tandem does, Tandem should get out of the way. The goal is to fill gaps, not compete.
+
+---
+
+## Features
 
 ### Clarify
 
@@ -48,10 +93,13 @@ A UserPromptSubmit hook detects long, unstructured input (dictation, brain dumps
 Claude already remembers. Recall makes it *good* at remembering.
 
 - **Session bridge** — maintains `progress.md` alongside MEMORY.md, surviving context compaction within a session
+- **Pre-compaction safety net** — a PreCompact hook captures the precise "where are we right now" before compaction compresses in-memory context. After compaction, SessionStart surfaces this snapshot so Claude picks up exactly where it left off
 - **Memory compaction** — at session end, rewrites MEMORY.md to stay under 200 lines (the native loading limit). Keeps what's relevant, lets stale details decay
+- **Cross-project context** — at session end, logs a summary of what happened to a global rolling log (`~/.tandem/memory/global.md`, 30 entries max). At session start, Claude sees recent activity from other projects for cross-repo awareness
+- **Progress nudges** — when a task completes and progress.md is stale, an async nudge reminds Claude to record what happened
 - **Pattern promotion** — recurring patterns are surfaced as candidates for CLAUDE.md with suggested promotion targets
 
-**What you see:** `Recalled.` at session start means the previous session's memory was compacted. If a session ends abnormally, stale progress is detected and recovered next time.
+**What you see:** `Recalled.` at session start means the previous session's memory was compacted. `Recent work in other projects:` shows what you've been doing elsewhere. After compaction, `Resuming. Before compaction you were: ...` restores your exact position. If a session ends abnormally, stale progress is detected and recovered next time.
 
 ### Grow
 
@@ -69,13 +117,17 @@ The user gets smarter. Learns as they go.
 
 **Profile directory:** `~/.tandem/profile/` (override with `TANDEM_PROFILE_DIR`)
 
+---
+
 ## Status
 
 ```
 /tandem:status
 ```
 
-Reports which pillars are installed, hook health, memory stats, and profile stats.
+Reports which features are installed, hook health, memory stats, and profile stats.
+
+---
 
 ## How it works
 
@@ -86,12 +138,17 @@ Tandem uses Claude Code's native hook system. Zero background services, zero dat
 | Event | Script | Purpose |
 |-------|--------|---------|
 | UserPromptSubmit | `detect-raw-input.sh` | Clarify detection |
-| SessionStart | `session-start.sh` | Provisioning + stale progress recovery |
-| SessionEnd | `session-end.sh` | Memory compaction + pattern card extraction |
+| SessionStart | `session-start.sh` | Provisioning, post-compaction state recovery, cross-project context, stale progress detection |
+| SessionEnd | `session-end.sh` | Memory compaction + pattern card extraction + global activity log |
+| PreCompact | `pre-compact.sh` | Current state snapshot + progress safety net |
+| TaskCompleted | `task-completed.sh` | Async progress nudge when progress.md is stale |
 
 ### Cost
 
-SessionEnd hooks call `claude -p --model haiku --max-budget-usd 0.05`. Only fires when there's a `progress.md` to process — trivial sessions cost nothing. Typical cost: $0.001-0.01 per session end.
+LLM-calling hooks use `claude -p --model haiku` with budget caps:
+- **SessionEnd** — `--max-budget-usd 0.05`. Only fires when there's a `progress.md` to process. Typical cost: $0.001-0.01 per session end.
+- **PreCompact** — `--max-budget-usd 0.03`. Fires before each compaction to capture current state. Typical cost: $0.01-0.02 per compaction.
+- **TaskCompleted** — no LLM call. Just a file stat check (milliseconds).
 
 ### Files created
 
@@ -99,17 +156,62 @@ Tandem creates zero files in your repositories. Everything lives in:
 - `~/.claude/rules/tandem-*.md` — behavioural rules (install = copy, uninstall = delete)
 - `~/.claude/projects/{project}/memory/progress.md` — session bridge (alongside native MEMORY.md)
 - `~/.tandem/profile/` — learning profile
+- `~/.tandem/memory/global.md` — cross-project activity log (30 entries max)
+
+---
 
 ## Uninstall
+
+**Remove plugin:**
 
 ```bash
 /plugin uninstall tandem
 ```
 
-This removes the plugin (skills, hooks, scripts). Your data is preserved:
-- MEMORY.md and progress.md — untouched
-- Profile directory and pattern cards — untouched
-- Rules files — remain at `~/.claude/rules/tandem-*.md` (delete manually to fully clean up)
+This removes the plugin (skills, hooks, scripts). Your data is preserved.
+
+**Complete removal (including all data):**
+
+1. **Remove rules files:**
+   ```bash
+   rm ~/.claude/rules/tandem-*.md
+   ```
+
+2. **Remove CLAUDE.md section:**
+   Open `~/.claude/CLAUDE.md` and delete the section between `<!-- tandem:start -->` and `<!-- tandem:end -->` (inclusive).
+
+3. **Remove data directories:**
+   ```bash
+   # Profile and pattern cards
+   rm -rf ~/.tandem/profile/
+
+   # State files and recurrence data
+   rm -rf ~/.tandem/state/
+
+   # Global cross-project memory
+   rm -rf ~/.tandem/memory/
+
+   # Provisioning marker
+   rm -rf ~/.tandem/.provisioned
+   ```
+
+4. **Remove project memory files:**
+   ```bash
+   # progress.md files from all projects
+   find ~/.claude/projects -name progress.md -delete
+
+   # Tandem session markers
+   find ~/.claude/projects -name .tandem-last-compaction -delete
+   ```
+
+**Partial disable:**
+
+To disable individual features without full uninstall:
+- **Disable Clarify:** `rm ~/.claude/rules/tandem-clarify.md`
+- **Disable Recall:** `rm ~/.claude/rules/tandem-recall.md` + remove CLAUDE.md section
+- **Disable Grow:** `rm ~/.claude/rules/tandem-grow.md`
+
+---
 
 ## License
 

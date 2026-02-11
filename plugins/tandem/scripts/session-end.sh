@@ -2,7 +2,13 @@
 # SessionEnd hook: runs compaction (Recall) then extraction (Grow) sequentially.
 # Both depend on progress.md — this script ensures ordering and single cleanup.
 
-command -v jq &>/dev/null || { echo "[Tandem] Error: jq required but not found" >&2; exit 0; }
+if ! command -v jq &>/dev/null; then
+  echo "[Tandem] Error: jq not found" >&2
+  echo "  Tandem requires jq for JSON parsing." >&2
+  echo "  Install: brew install jq (macOS) | apt install jq (Linux)" >&2
+  echo "  Verify: jq --version" >&2
+  exit 0
+fi
 
 # Read hook input from stdin
 INPUT=$(cat)
@@ -26,7 +32,11 @@ TODAY=$(date +%Y-%m-%d)
 recall_compact() {
   # Verify claude CLI is available
   if ! command -v claude &>/dev/null; then
-    echo "[Tandem Recall] Error: claude CLI not found on PATH. Skipping compaction." >&2
+    echo "[Tandem Recall] Error: claude CLI not found" >&2
+    echo "  Recall requires the Claude CLI for memory compaction." >&2
+    echo "  The CLI is installed with Claude Code - check your PATH." >&2
+    echo "  Verify: which claude" >&2
+    echo "  Skipping compaction." >&2
     return 1
   fi
 
@@ -83,7 +93,12 @@ Produce the compacted MEMORY.md now."
   RESULT=$(echo "$PROMPT" | claude -p --model haiku --max-budget-usd 0.05 2>/dev/null)
 
   if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
-    echo "[Tandem Recall] Warning: compaction LLM call failed." >&2
+    echo "[Tandem Recall] Warning: compaction LLM call failed" >&2
+    echo "  This may be due to:" >&2
+    echo "  - Network connectivity issues" >&2
+    echo "  - API rate limits or budget exhaustion" >&2
+    echo "  - Claude CLI configuration problems" >&2
+    echo "  Progress.md preserved for next session." >&2
     return 1
   fi
 
@@ -210,7 +225,11 @@ Produce the compacted MEMORY.md now."
 grow_extract() {
   # Verify claude CLI is available
   if ! command -v claude &>/dev/null; then
-    echo "[Tandem Grow] Error: claude CLI not found on PATH. Skipping extraction." >&2
+    echo "[Tandem Grow] Error: claude CLI not found" >&2
+    echo "  Grow requires the Claude CLI for learning extraction." >&2
+    echo "  The CLI is installed with Claude Code - check your PATH." >&2
+    echo "  Verify: which claude" >&2
+    echo "  Skipping extraction." >&2
     return 1
   fi
 
@@ -297,7 +316,12 @@ Review the session and extract learnings now."
   RESULT=$(echo "$PROMPT" | claude -p --model haiku --max-budget-usd 0.05 2>/dev/null)
 
   if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
-    echo "[Tandem Grow] Warning: extraction LLM call failed." >&2
+    echo "[Tandem Grow] Warning: extraction LLM call failed" >&2
+    echo "  This may be due to:" >&2
+    echo "  - Network connectivity issues" >&2
+    echo "  - API rate limits or budget exhaustion" >&2
+    echo "  - Claude CLI configuration problems" >&2
+    echo "  Progress.md preserved for next session." >&2
     return 1
   fi
 
@@ -498,6 +522,34 @@ else
   echo "" >> "$MEMORY_DIR/progress.md"
   echo "## Session End Partial Failure ($(date +%Y-%m-%d))" >> "$MEMORY_DIR/progress.md"
   echo "Recall completed: $RECALL_STATUS, Grow completed: $GROW_STATUS" >> "$MEMORY_DIR/progress.md"
+fi
+
+# ─── Status output ──────────────────────────────────────────────────────────
+
+# Show what was accomplished (unless TANDEM_QUIET is set)
+if [ "${TANDEM_QUIET:-0}" != "1" ]; then
+  # Only output status if at least one phase completed
+  if [ "$RECALL_STATUS" -eq 1 ] || [ "$GROW_STATUS" -eq 1 ] || [ "$GLOBAL_STATUS" -eq 1 ]; then
+    echo "[Tandem] Session complete" >&2
+
+    if [ "$RECALL_STATUS" -eq 1 ]; then
+      # Try to show line count reduction if possible
+      if [ -f "$MEMORY_DIR/MEMORY.md" ]; then
+        LINE_COUNT=$(wc -l < "$MEMORY_DIR/MEMORY.md" | tr -d ' ')
+        echo "  ✓ Recall: compacted MEMORY.md (${LINE_COUNT} lines)" >&2
+      else
+        echo "  ✓ Recall: compacted MEMORY.md" >&2
+      fi
+    fi
+
+    if [ "$GROW_STATUS" -eq 1 ]; then
+      echo "  ✓ Grow: updated profile" >&2
+    fi
+
+    if [ "$GLOBAL_STATUS" -eq 1 ]; then
+      echo "  ✓ Global: logged activity" >&2
+    fi
+  fi
 fi
 
 exit 0

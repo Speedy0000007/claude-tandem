@@ -1,7 +1,0 @@
-{
-  "name": "tandem",
-  "version": "1.0.0",
-  "description": "Compound learning for Claude Code — every session makes the next one better",
-  "author": "jonny981",
-  "hooks": "./hooks/hooks.json"
-}

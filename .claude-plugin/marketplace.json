@@ -1,5 +1,11 @@
 {
-  "repository": "github.com/jonny981/claude-tandem",
-  "keywords": ["memory", "learning", "prompts", "productivity"],
-  "category": "productivity"
+  "name": "tandem-marketplace",
+  "owner": {"name": "jonny981"},
+  "plugins": [
+    {
+      "name": "tandem",
+      "source": "./plugins/tandem",
+      "description": "Compound learning for Claude Code — every session makes the next one better"
+    }
+  ]
 }

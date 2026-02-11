@@ -3,7 +3,13 @@
 # Outputs a systemMessage to stdout only when progress.md is stale.
 # No LLM call — just a file stat check.
 
-command -v jq &>/dev/null || exit 0
+if ! command -v jq &>/dev/null; then
+  echo "[Tandem] Error: jq not found" >&2
+  echo "  Tandem requires jq for JSON parsing." >&2
+  echo "  Install: brew install jq (macOS) | apt install jq (Linux)" >&2
+  echo "  Verify: jq --version" >&2
+  exit 0
+fi
 
 # Read hook input from stdin
 INPUT=$(cat)
