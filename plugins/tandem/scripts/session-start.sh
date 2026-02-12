@@ -415,10 +415,33 @@ fi
 # Tandem checkpoint detection
 if git -C "$CWD" rev-parse --git-dir &>/dev/null; then
   LAST_MSG=$(git -C "$CWD" log -1 --format="%s" 2>/dev/null)
-  LAST_HASH=$(git -C "$CWD" log -1 --format="%h" 2>/dev/null)
   if [[ "$LAST_MSG" == "chore(tandem): session checkpoint" ]] || \
      [[ "$LAST_MSG" == "chore(tandem): session context" ]]; then
-    echo "Last auto-commit: ${LAST_HASH}:${LAST_MSG}. If work was incomplete, amend this commit."
+    # Count consecutive auto-commits from HEAD
+    AC_COUNT=0
+    while true; do
+      AC_SHA=$(git -C "$CWD" rev-parse "HEAD~${AC_COUNT}" 2>/dev/null) || break
+      AC_SUBJ=$(git -C "$CWD" log -1 --format="%s" "$AC_SHA" 2>/dev/null)
+      if [[ "$AC_SUBJ" == "chore(tandem): session checkpoint" ]] || \
+         [[ "$AC_SUBJ" == "chore(tandem): session context" ]] || \
+         git -C "$CWD" log -1 --format='%B' "$AC_SHA" 2>/dev/null | grep -q 'Tandem-Auto-Commit: true'; then
+        AC_COUNT=$((AC_COUNT + 1))
+      else
+        break
+      fi
+    done
+    LAST_HASH=$(git -C "$CWD" log -1 --format="%h" 2>/dev/null)
+    LAST_DATE=$(git -C "$CWD" log -1 --format="%ai" 2>/dev/null | cut -d' ' -f1,2 | cut -d: -f1,2)
+    if [ "$AC_COUNT" -gt 1 ]; then
+      COMMIT_LABEL="${AC_COUNT} auto-commits, latest: ${LAST_DATE} ${LAST_HASH}"
+    else
+      COMMIT_LABEL="Last auto-commit: ${LAST_DATE} ${LAST_HASH} \"${LAST_MSG}\""
+    fi
+    if [ "${TANDEM_AUTO_SQUASH:-1}" = "0" ]; then
+      echo "${COMMIT_LABEL}. Squash before pushing, or use /tandem:squash."
+    else
+      echo "${COMMIT_LABEL}. Will be squashed into your next commit."
+    fi
   fi
 fi
 
