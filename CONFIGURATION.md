@@ -176,12 +176,12 @@ Tandem uses conservative LLM budget caps to prevent runaway costs:
 
 | Hook | Model | Budget | Purpose |
 |------|-------|--------|---------|
-| UserPromptSubmit | Haiku | $0.02 | Prompt restructuring |
+| UserPromptSubmit | Haiku | $0.10 | Prompt assessment + restructuring |
 | SessionEnd (Recall) | Haiku | $0.05 | MEMORY.md compaction |
 | SessionEnd (Grow) | Haiku | $0.05 | Learning extraction |
 | PreCompact | Haiku | $0.03 | State snapshot |
 
-Total worst-case per session: **$0.15** (if all hooks fire with substantive content)
+Total worst-case per session: **$0.23** (if all hooks fire with substantive content)
 
 Typical session cost: **$0.03-$0.08** (PreCompact + SessionEnd, UserPromptSubmit skipped for short prompts)
 
@@ -201,7 +201,7 @@ Every UserPromptSubmit hook writes a JSON line to `~/.tandem/logs/clarify.jsonl`
 }
 ```
 
-Actions: `skip` (prompt already clear) or `restructured` (Haiku rewrote it)
+Actions: `skip` (prompt already clear), `restructured` (Haiku rewrote it), or `clarify` (uncertainty detected, questions generated)
 
 **Unified log:**
 

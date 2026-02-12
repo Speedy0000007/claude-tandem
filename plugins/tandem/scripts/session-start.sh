@@ -110,6 +110,30 @@ if [ -n "$PLUGIN_VERSION" ]; then
   done
 fi
 
+# --- Provision UserPromptSubmit hook via stable symlink ---
+# Workaround: plugin hooks.json UserPromptSubmit entries are registered but never
+# execute due to a Claude Code bug. Provisioning into user settings.json works.
+# Idempotent: ln -sf updates target, settings.json only modified if entry missing.
+
+mkdir -p "$HOME/.tandem/bin"
+ln -sf "$PLUGIN_ROOT/scripts/detect-raw-input.sh" "$HOME/.tandem/bin/detect-raw-input.sh"
+
+SETTINGS_FILE="$HOME/.claude/settings.json"
+if [ -f "$SETTINGS_FILE" ]; then
+  HAS_HOOK=$(jq '[.hooks.UserPromptSubmit // [] | .[].hooks[]? | select(.command | test("detect-raw-input"))] | length' "$SETTINGS_FILE" 2>/dev/null)
+  if [ "${HAS_HOOK:-0}" = "0" ]; then
+    TMPFILE=$(mktemp)
+    jq '.hooks.UserPromptSubmit = ((.hooks.UserPromptSubmit // []) + [{"hooks": [{"type": "command", "command": "$HOME/.tandem/bin/detect-raw-input.sh", "timeout": 15}]}])' "$SETTINGS_FILE" > "$TMPFILE"
+    if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
+      mv "$TMPFILE" "$SETTINGS_FILE"
+      tandem_log info "provisioned UserPromptSubmit hook in settings.json"
+    else
+      rm -f "$TMPFILE"
+      tandem_log warn "failed to provision UserPromptSubmit hook"
+    fi
+  fi
+fi
+
 # --- CLAUDE.md section injection ---
 
 CLAUDE_MD="$HOME/.claude/CLAUDE.md"
