@@ -4,6 +4,9 @@
 # Only captures PROGRESS if progress.md is stale/missing (safety net).
 # Outputs nothing to stdout — writes directly to progress.md.
 
+# Skip if running inside a worker's claude -p call
+[ -n "${TANDEM_WORKER:-}" ] && exit 0
+
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}"
 source "$PLUGIN_ROOT/lib/tandem.sh"
 

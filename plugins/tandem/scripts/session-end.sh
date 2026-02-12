@@ -25,7 +25,8 @@ if [ "${1:-}" = "--worker" ]; then
   TODAY=$(date +%Y-%m-%d)
 
   # Functions are defined below — execution continues after function definitions
-  TANDEM_WORKER=1
+  # Export so child claude -p processes inherit it (prevents recursive hook firing)
+  export TANDEM_WORKER=1
 
   tandem_log info "worker started (pid $$)"
 
@@ -44,6 +45,11 @@ if [ "${1:-}" = "--worker" ]; then
 fi
 
 # ─── Hook mode: parse input, inform user, spawn worker ────────────────────
+
+if [ -n "${TANDEM_WORKER:-}" ] && [ "${1:-}" != "--worker" ]; then
+  # Hook fired inside a claude -p call from a running worker — skip
+  exit 0
+fi
 
 if [ -z "${TANDEM_WORKER:-}" ]; then
   PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}"

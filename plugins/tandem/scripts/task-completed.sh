@@ -3,6 +3,9 @@
 # Outputs a systemMessage to stdout only when progress.md is stale.
 # No LLM call — just a file stat check.
 
+# Skip if running inside a worker's claude -p call
+[ -n "${TANDEM_WORKER:-}" ] && exit 0
+
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}"
 source "$PLUGIN_ROOT/lib/tandem.sh"
 
