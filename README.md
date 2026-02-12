@@ -12,9 +12,13 @@
   <sub>Claude gets sharper. You get smarter.</sub>
 </p>
 
+```bash
+claude "Let's work in Tandem"
+```
+
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/version-v1.1.0-green.svg" alt="Version: v1.1.0">
+  <img src="https://img.shields.io/badge/version-v1.2.1-green.svg" alt="Version: v1.2.1">
   <img src="https://img.shields.io/badge/platform-Claude%20Code-blueviolet.svg" alt="Platform: Claude Code">
   <img src="https://img.shields.io/badge/shell-bash-orange.svg" alt="Shell: bash">
 </p>
@@ -23,17 +27,18 @@
 
 ## What it does
 
-Tandem is a Claude Code plugin with three features:
+Tandem is a Claude Code plugin with four features:
 
 <table>
   <tr>
-    <td align="center" width="33%"><strong>Clarify</strong><br>Restructures messy input into well-formed prompts — then executes immediately</td>
-    <td align="center" width="33%"><strong>Recall</strong><br>Keeps your agent's memory sharp across sessions, compactions, and projects</td>
-    <td align="center" width="33%"><strong>Grow</strong><br>Teaches you as you work — captures concepts and identifies skill gaps</td>
+    <td align="center" width="25%"><strong>Clarify</strong><br>Clarifies input</td>
+    <td align="center" width="25%"><strong>Recall</strong><br>Recalls working memory</td>
+    <td align="center" width="25%"><strong>Commit</strong><br>Commits durable memory</td>
+    <td align="center" width="25%"><strong>Grow</strong><br>Enhances both user and model</td>
   </tr>
 </table>
 
-Each feature is independently valuable. Combined, they compound — better input leads to a smarter agent, which produces richer learning, which makes you more effective at directing the next session.
+Each feature is independently valuable. Combined, they compound: better input leads to a smarter agent, richer commit history captures the reasoning permanently, and learning compounds across every session.
 
 ---
 
@@ -51,7 +56,15 @@ See [INSTALL.md](INSTALL.md) for detailed setup instructions.
 /plugin install tandem
 ```
 
-First session after install auto-provisions rules files and profile directory. Run `/tandem:status` to verify.
+Then start your first session:
+
+```bash
+claude "Let's work in Tandem"
+```
+
+Tandem provisions itself on first run and you'll see the startup display immediately. Run `/tandem:status` to verify everything is working.
+
+To start a session without Tandem features, use `claude "Skip Tandem"` instead.
 
 **Documentation:**
 - [INSTALL.md](INSTALL.md) — detailed installation and setup
@@ -67,6 +80,7 @@ Claude Code already has auto-memory, MEMORY.md, context compaction, and a hook s
 - **Auto-memory writes MEMORY.md.** Tandem compacts it to stay under the 200-line loading limit.
 - **Claude Code has no cross-project awareness.** Tandem adds a lightweight rolling log so sessions in one repo know what you've been doing elsewhere.
 - **Claude Code has no session bridge.** Tandem adds progress.md alongside MEMORY.md — same directory, same conventions.
+- **Git is already the permanent record.** Tandem enriches commit messages with session context so nothing is lost to compaction. Your thinking persists in `git log` forever.
 - **Rules files, hooks, skills** — all use Claude Code's native plugin system. No MCP servers, no background processes, no databases.
 
 If Claude Code ships a native version of something Tandem does, Tandem should get out of the way. The goal is to fill gaps, not compete.
@@ -100,6 +114,23 @@ Claude already remembers. Recall makes it *good* at remembering.
 - **Pattern promotion** — recurring patterns are surfaced as candidates for CLAUDE.md with suggested promotion targets
 
 **What you see:** `Recalled.` at session start means the previous session's memory was compacted. `Recent work in other projects:` shows what you've been doing elsewhere. After compaction, `Resuming. Before compaction you were: ...` restores your exact position. If a session ends abnormally, stale progress is detected and recovered next time.
+
+### Commit
+
+Git is the only permanent record. Progress.md gets compacted. MEMORY.md gets rewritten. Commit messages persist forever.
+
+Tandem treats every commit as a context restoration point. Not just what changed, but why: what process led here, what was considered, what constraints existed, what was known and unknown at the time.
+
+- **Commit body enforcement** — a PreToolUse hook ensures every commit has a body that captures the developer's thinking. Subject line follows Conventional Commits. Body captures the why, the what-else, the what-next.
+- **Session checkpoints** — at session end, before memory compaction, Tandem auto-commits a checkpoint that preserves the full session context in git. Even sessions with no code changes get a context commit. Nothing is lost to compaction.
+- **Creative safety net** — when context is always preserved, you can be brave. Try things. Explore freely. If you revert, the reasoning that led to the attempt is still in the commit history.
+
+The result: `git log` becomes a complete, queryable history of every AI session. Combined with any tool that can read git history, you can ask "why is this code the way it is?" at any point and get the full reasoning from the session that wrote it.
+
+**What you see:** If you try to commit without a body, the hook blocks it and feeds you session context to write from. At session end, `Session captured` confirms the checkpoint was written. Next session, if a checkpoint exists, you're notified to review or amend it.
+
+**Configurable:**
+- `TANDEM_AUTO_COMMIT=0` — disable auto-commits at session end (default: enabled)
 
 ### Grow
 
@@ -137,9 +168,10 @@ Tandem uses Claude Code's native hook system. Zero background services, zero dat
 
 | Event | Script | Purpose |
 |-------|--------|---------|
+| PreToolUse | `validate-commit.sh` | Conventional commit format + body enforcement |
 | UserPromptSubmit | `detect-raw-input.sh` | Clarify detection |
 | SessionStart | `session-start.sh` | Provisioning, post-compaction state recovery, cross-project context, stale progress detection |
-| SessionEnd | `session-end.sh` | Memory compaction + pattern card extraction + global activity log |
+| SessionEnd | `session-end.sh` | Session checkpoint (phase 0) + memory compaction (phase 1) + pattern extraction (phase 2) + global log (phase 3) |
 | PreCompact | `pre-compact.sh` | Current state snapshot + progress safety net |
 | TaskCompleted | `task-completed.sh` | Async progress nudge when progress.md is stale |
 
@@ -153,7 +185,7 @@ LLM-calling hooks use `claude -p --model haiku` with budget caps:
 ### Files created
 
 Tandem creates zero files in your repositories. Everything lives in:
-- `~/.claude/rules/tandem-*.md` — behavioural rules (install = copy, uninstall = delete)
+- `~/.claude/rules/tandem-*.md` — behavioural rules including commit body enforcement (install = copy, uninstall = delete)
 - `~/.claude/projects/{project}/memory/progress.md` — session bridge (alongside native MEMORY.md)
 - `~/.tandem/profile/` — learning profile
 - `~/.tandem/memory/global.md` — cross-project activity log (30 entries max)
@@ -209,6 +241,7 @@ This removes the plugin (skills, hooks, scripts). Your data is preserved.
 To disable individual features without full uninstall:
 - **Disable Clarify:** `rm ~/.claude/rules/tandem-clarify.md`
 - **Disable Recall:** `rm ~/.claude/rules/tandem-recall.md` + remove CLAUDE.md section
+- **Disable Commit:** `rm ~/.claude/rules/tandem-commits.md` + set `TANDEM_AUTO_COMMIT=0`
 - **Disable Grow:** `rm ~/.claude/rules/tandem-grow.md`
 
 ---

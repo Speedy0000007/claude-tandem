@@ -4,13 +4,10 @@
 # Only captures PROGRESS if progress.md is stale/missing (safety net).
 # Outputs nothing to stdout — writes directly to progress.md.
 
-if ! command -v jq &>/dev/null; then
-  echo "[Tandem] Error: jq not found" >&2
-  echo "  Tandem requires jq for JSON parsing." >&2
-  echo "  Install: brew install jq (macOS) | apt install jq (Linux)" >&2
-  echo "  Verify: jq --version" >&2
-  exit 0
-fi
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}"
+source "$PLUGIN_ROOT/lib/tandem.sh"
+
+tandem_require_jq
 
 # Read hook input from stdin
 INPUT=$(cat)
@@ -66,24 +63,18 @@ ${TRANSCRIPT_TAIL}
 </transcript>"
 
 # Call haiku
-if ! command -v claude &>/dev/null; then
-  echo "[Tandem] Warning: claude CLI not found, skipping pre-compaction state capture" >&2
-  echo "  The CLI is installed with Claude Code - check your PATH." >&2
-  echo "  Verify: which claude" >&2
-  exit 0
-fi
+tandem_require_claude || exit 0
 
 RESULT=$(echo "$PROMPT" | claude -p --model haiku --max-budget-usd 0.03 2>/dev/null)
 
 if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
-  echo "[Tandem] Warning: pre-compaction state capture failed" >&2
-  echo "  This may be due to network issues or API limits." >&2
-  echo "  Post-compaction recovery may be limited." >&2
+  tandem_log warn "pre-compaction state capture failed (network or API issue)"
   exit 0
 fi
 
 # Check for SKIP
 if echo "$RESULT" | grep -qx 'SKIP'; then
+  tandem_log debug "pre-compaction skipped (trivial activity)"
   exit 0
 fi
 
@@ -103,11 +94,10 @@ if [ "$INCLUDE_PROGRESS" = true ]; then
   PROGRESS_CONTENT=$(echo "$RESULT" | sed -n '/^PROGRESS:/,$p')
 fi
 
-# Append to progress.md via temp file with validation
+# Append to progress.md via temp file
 TMPFILE=$(mktemp)
-
 if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
-  echo "[Tandem] Warning: failed to create temp file for progress.md" >&2
+  tandem_log error "failed to create temp file for progress.md"
   exit 0
 fi
 
@@ -127,13 +117,13 @@ if [ -n "$STATE_CONTENT" ]; then
   echo "$STATE_CONTENT" | sed '1s/^STATE://' >> "$TMPFILE"
 fi
 
-# Validate write before commit
 if [ $? -ne 0 ]; then
-  echo "[Tandem] Warning: failed to write progress.md temp file" >&2
+  tandem_log error "failed to write progress.md temp file"
   rm -f "$TMPFILE"
   exit 0
 fi
 
 mv "$TMPFILE" "$MEMORY_DIR/progress.md"
+tandem_log info "captured state before compaction"
 
 exit 0

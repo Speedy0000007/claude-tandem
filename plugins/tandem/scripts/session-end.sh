@@ -12,6 +12,9 @@ if [ "${1:-}" = "--worker" ]; then
   CWD="$2"
   [ -z "$CWD" ] && exit 0
 
+  PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}"
+  _TANDEM_SCRIPT="session-end" source "$PLUGIN_ROOT/lib/tandem.sh"
+
   SANITISED=$(echo "$CWD" | sed 's|/|-|g')
   MEMORY_DIR="$HOME/.claude/projects/${SANITISED}/memory"
   [ ! -f "$MEMORY_DIR/progress.md" ] && exit 0
@@ -21,11 +24,6 @@ if [ "${1:-}" = "--worker" ]; then
   RECURRENCE_FILE="$STATE_DIR/recurrence.json"
   TODAY=$(date +%Y-%m-%d)
 
-  # Redirect stderr to error log
-  ERROR_LOG="$HOME/.tandem/logs/session-end-errors.log"
-  mkdir -p "$(dirname "$ERROR_LOG")"
-  exec 2>>"$ERROR_LOG"
-
   # Functions are defined below — execution continues after function definitions
   TANDEM_WORKER=1
 fi
@@ -33,13 +31,10 @@ fi
 # ─── Hook mode: parse input, inform user, spawn worker ────────────────────
 
 if [ -z "${TANDEM_WORKER:-}" ]; then
-  if ! command -v jq &>/dev/null; then
-    echo "[Tandem] Error: jq not found" >&2
-    echo "  Tandem requires jq for JSON parsing." >&2
-    echo "  Install: brew install jq (macOS) | apt install jq (Linux)" >&2
-    echo "  Verify: jq --version" >&2
-    exit 0
-  fi
+  PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}"
+  source "$PLUGIN_ROOT/lib/tandem.sh"
+
+  tandem_require_jq
 
   # Read hook input from stdin
   INPUT=$(cat)
@@ -55,7 +50,8 @@ if [ -z "${TANDEM_WORKER:-}" ]; then
 
   # Inform user (synchronous — visible before session exits)
   PROGRESS_LINES=$(wc -l < "$MEMORY_DIR/progress.md" | tr -d ' ')
-  echo "[Tandem] Session captured (${PROGRESS_LINES} lines). Compacting memory and extracting learnings..."
+  tandem_print "Session captured (${PROGRESS_LINES} lines). Compacting memory..."
+  tandem_log info "session end: ${PROGRESS_LINES} lines of progress"
 
   # Spawn named worker process and exit
   "$0" --worker "$CWD" &
@@ -67,15 +63,7 @@ fi
 # ─── Phase 1: Recall — compact MEMORY.md ───────────────────────────────────
 
 recall_compact() {
-  # Verify claude CLI is available
-  if ! command -v claude &>/dev/null; then
-    echo "[Tandem Recall] Error: claude CLI not found" >&2
-    echo "  Recall requires the Claude CLI for memory compaction." >&2
-    echo "  The CLI is installed with Claude Code - check your PATH." >&2
-    echo "  Verify: which claude" >&2
-    echo "  Skipping compaction." >&2
-    return 1
-  fi
+  tandem_require_claude || return 1
 
   PROGRESS_CONTENT=$(cat "$MEMORY_DIR/progress.md")
   MEMORY_CONTENT=""
@@ -126,27 +114,24 @@ ${PROGRESS_CONTENT}
 
 Produce the compacted MEMORY.md now."
 
+  tandem_log info "compacting memory"
+
   # Call claude -p with haiku and budget cap
   RESULT=$(echo "$PROMPT" | claude -p --model haiku --max-budget-usd 0.05 2>/dev/null)
 
   if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
-    echo "[Tandem Recall] Warning: compaction LLM call failed" >&2
-    echo "  This may be due to:" >&2
-    echo "  - Network connectivity issues" >&2
-    echo "  - API rate limits or budget exhaustion" >&2
-    echo "  - Claude CLI configuration problems" >&2
-    echo "  Progress.md preserved for next session." >&2
+    tandem_log error "compaction failed: LLM returned empty (network or API issue)"
     return 1
   fi
 
   # Sanity check: result must be substantive (> 5 lines, no refusal patterns)
   LINE_COUNT=$(echo "$RESULT" | wc -l | tr -d ' ')
   if [ "$LINE_COUNT" -lt 5 ]; then
-    echo "[Tandem Recall] Warning: compaction result too short (${LINE_COUNT} lines). Skipping overwrite." >&2
+    tandem_log error "compaction failed: result too short (${LINE_COUNT} lines)"
     return 1
   fi
   if echo "$RESULT" | grep -qiE '^(I cannot|I'"'"'m sorry|I am sorry|I apologize|As an AI)'; then
-    echo "[Tandem Recall] Warning: compaction result looks like a refusal. Skipping overwrite." >&2
+    tandem_log error "compaction failed: LLM returned refusal"
     return 1
   fi
 
@@ -169,22 +154,25 @@ Produce the compacted MEMORY.md now."
     ls -t "$MEMORY_DIR"/.MEMORY.md.backup-* 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null
   fi
 
-  # Atomic write via temp file with validation
+  # Atomic write via temp file
   mkdir -p "$MEMORY_DIR"
   TMPFILE=$(mktemp "$MEMORY_DIR/MEMORY.md.XXXXXX")
   if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
-    echo "[Tandem Recall] Error: failed to create temp file" >&2
+    tandem_log error "failed to create temp file for MEMORY.md"
     return 1
   fi
 
   echo "$MEMORY_RESULT" > "$TMPFILE"
   if [ $? -ne 0 ] || [ ! -s "$TMPFILE" ]; then
-    echo "[Tandem Recall] Error: failed to write temp file (disk full?)" >&2
+    tandem_log error "failed to write MEMORY.md temp file (disk full?)"
     rm -f "$TMPFILE"
     return 1
   fi
 
   mv "$TMPFILE" "$MEMORY_DIR/MEMORY.md"
+
+  FINAL_LINES=$(wc -l < "$MEMORY_DIR/MEMORY.md" | tr -d ' ')
+  tandem_log info "memory compacted (${FINAL_LINES} lines)"
 
   # Write compaction marker for SessionStart indicator
   date +%s > "$MEMORY_DIR/.tandem-last-compaction"
@@ -224,66 +212,54 @@ Produce the compacted MEMORY.md now."
       theme=$(echo "$theme" | xargs)
       [ -z "$theme" ] && continue
 
-      # Check if theme exists with validation
+      # Check if theme exists
       EXISTING_COUNT=$(echo "$RECURRENCE" | jq -r ".themes[\"$theme\"].count // 0" 2>/dev/null)
       if [ $? -ne 0 ] || ! [[ "$EXISTING_COUNT" =~ ^[0-9]+$ ]]; then
-        echo "[Tandem Recall] Warning: jq parse failed for theme $theme, skipping" >&2
+        tandem_log warn "jq parse failed for theme $theme, skipping"
         continue
       fi
 
       if [ "$EXISTING_COUNT" -gt 0 ]; then
-        # Increment count and update last_seen
         RECURRENCE=$(echo "$RECURRENCE" | jq \
           --arg t "$theme" \
           --arg d "$TODAY" \
           '.themes[$t].count += 1 | .themes[$t].last_seen = $d' 2>/dev/null)
         if [ $? -ne 0 ] || [ -z "$RECURRENCE" ]; then
-          echo "[Tandem Recall] Warning: jq update failed for theme $theme, skipping" >&2
+          tandem_log warn "jq update failed for theme $theme"
           continue
         fi
       else
-        # Add new theme
         RECURRENCE=$(echo "$RECURRENCE" | jq \
           --arg t "$theme" \
           --arg d "$TODAY" \
           '.themes[$t] = {"count": 1, "first_seen": $d, "last_seen": $d}' 2>/dev/null)
         if [ $? -ne 0 ] || [ -z "$RECURRENCE" ]; then
-          echo "[Tandem Recall] Warning: jq add failed for theme $theme, skipping" >&2
+          tandem_log warn "jq add failed for theme $theme"
           continue
         fi
       fi
     done
 
-    # Atomic write recurrence.json with validation
+    # Atomic write recurrence.json
     TMPFILE=$(mktemp "$STATE_DIR/recurrence.json.XXXXXX")
     if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
-      echo "[Tandem Recall] Warning: failed to create temp file for recurrence.json" >&2
-      continue
+      tandem_log warn "failed to create temp file for recurrence.json"
+    else
+      echo "$RECURRENCE" > "$TMPFILE"
+      if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
+        mv "$TMPFILE" "$RECURRENCE_FILE"
+      else
+        tandem_log warn "failed to write recurrence.json temp file"
+        rm -f "$TMPFILE"
+      fi
     fi
-
-    echo "$RECURRENCE" > "$TMPFILE"
-    if [ $? -ne 0 ] || [ ! -s "$TMPFILE" ]; then
-      echo "[Tandem Recall] Warning: failed to write recurrence.json temp file" >&2
-      rm -f "$TMPFILE"
-      continue
-    fi
-
-    mv "$TMPFILE" "$RECURRENCE_FILE"
   fi
 }
 
 # ─── Phase 2: Grow — extract learnings to profile ───────────────────────────
 
 grow_extract() {
-  # Verify claude CLI is available
-  if ! command -v claude &>/dev/null; then
-    echo "[Tandem Grow] Error: claude CLI not found" >&2
-    echo "  Grow requires the Claude CLI for learning extraction." >&2
-    echo "  The CLI is installed with Claude Code - check your PATH." >&2
-    echo "  Verify: which claude" >&2
-    echo "  Skipping extraction." >&2
-    return 1
-  fi
+  tandem_require_claude || return 1
 
   PROGRESS_CONTENT=$(cat "$MEMORY_DIR/progress.md")
 
@@ -364,21 +340,19 @@ ${RECURRENCE_THEMES}
 
 Review the session and extract learnings now."
 
+  tandem_log info "extracting learnings"
+
   # Call claude -p with haiku and budget cap
   RESULT=$(echo "$PROMPT" | claude -p --model haiku --max-budget-usd 0.05 2>/dev/null)
 
   if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
-    echo "[Tandem Grow] Warning: extraction LLM call failed" >&2
-    echo "  This may be due to:" >&2
-    echo "  - Network connectivity issues" >&2
-    echo "  - API rate limits or budget exhaustion" >&2
-    echo "  - Claude CLI configuration problems" >&2
-    echo "  Progress.md preserved for next session." >&2
+    tandem_log error "extraction failed: LLM returned empty (network or API issue)"
     return 1
   fi
 
   # Handle NONE response
   if echo "$RESULT" | grep -qx 'NONE'; then
+    tandem_log info "no learnings to extract"
     return 0
   fi
 
@@ -390,6 +364,7 @@ Review the session and extract learnings now."
   CURRENT_CONTENT=""
   REPLACE_MODE=false
   NUDGE=""
+  UPDATED_FILES=""
 
   while IFS= read -r line; do
     # Check for nudge
@@ -406,21 +381,20 @@ Review the session and extract learnings now."
         SLUG="${SLUG%.md}"
         TARGET="$PROFILE_DIR/${SLUG}.md"
         if [ "$REPLACE_MODE" = true ]; then
-          # Atomic overwrite with validation
           TMPFILE=$(mktemp "$PROFILE_DIR/${SLUG}.md.XXXXXX")
-          if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
-            echo "[Tandem Grow] Warning: failed to create temp file for ${SLUG}.md" >&2
-            continue
+          if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
+            echo "$CURRENT_CONTENT" > "$TMPFILE"
+            if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
+              mv "$TMPFILE" "$TARGET"
+              UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
+            else
+              tandem_log warn "failed to write ${SLUG}.md"
+              rm -f "$TMPFILE"
+            fi
           fi
-          echo "$CURRENT_CONTENT" > "$TMPFILE"
-          if [ $? -ne 0 ] || [ ! -s "$TMPFILE" ]; then
-            echo "[Tandem Grow] Warning: failed to write ${SLUG}.md temp file" >&2
-            rm -f "$TMPFILE"
-            continue
-          fi
-          mv "$TMPFILE" "$TARGET"
         else
           echo "$CURRENT_CONTENT" >> "$TARGET"
+          UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
         fi
       fi
       CURRENT_FILE="${line#FILE: }"
@@ -443,27 +417,20 @@ Review the session and extract learnings now."
         SLUG="${SLUG%.md}"
         TARGET="$PROFILE_DIR/${SLUG}.md"
         if [ "$REPLACE_MODE" = true ]; then
-          # Atomic overwrite with validation
           TMPFILE=$(mktemp "$PROFILE_DIR/${SLUG}.md.XXXXXX")
-          if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
-            echo "[Tandem Grow] Warning: failed to create temp file for ${SLUG}.md" >&2
-            CURRENT_FILE=""
-            CURRENT_CONTENT=""
-            REPLACE_MODE=false
-            continue
+          if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
+            echo "$CURRENT_CONTENT" > "$TMPFILE"
+            if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
+              mv "$TMPFILE" "$TARGET"
+              UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
+            else
+              tandem_log warn "failed to write ${SLUG}.md"
+              rm -f "$TMPFILE"
+            fi
           fi
-          echo "$CURRENT_CONTENT" > "$TMPFILE"
-          if [ $? -ne 0 ] || [ ! -s "$TMPFILE" ]; then
-            echo "[Tandem Grow] Warning: failed to write ${SLUG}.md temp file" >&2
-            rm -f "$TMPFILE"
-            CURRENT_FILE=""
-            CURRENT_CONTENT=""
-            REPLACE_MODE=false
-            continue
-          fi
-          mv "$TMPFILE" "$TARGET"
         else
           echo "$CURRENT_CONTENT" >> "$TARGET"
+          UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
         fi
       fi
       CURRENT_FILE=""
@@ -485,22 +452,28 @@ Review the session and extract learnings now."
     SLUG="${SLUG%.md}"
     TARGET="$PROFILE_DIR/${SLUG}.md"
     if [ "$REPLACE_MODE" = true ]; then
-      # Atomic overwrite with validation
       TMPFILE=$(mktemp "$PROFILE_DIR/${SLUG}.md.XXXXXX")
-      if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
-        echo "[Tandem Grow] Warning: failed to create temp file for ${SLUG}.md" >&2
-        return 0  # Best effort - don't fail the whole function
+      if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
+        echo "$CURRENT_CONTENT" > "$TMPFILE"
+        if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
+          mv "$TMPFILE" "$TARGET"
+          UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
+        else
+          tandem_log warn "failed to write ${SLUG}.md"
+          rm -f "$TMPFILE"
+        fi
       fi
-      echo "$CURRENT_CONTENT" > "$TMPFILE"
-      if [ $? -ne 0 ] || [ ! -s "$TMPFILE" ]; then
-        echo "[Tandem Grow] Warning: failed to write ${SLUG}.md temp file" >&2
-        rm -f "$TMPFILE"
-        return 0  # Best effort - don't fail the whole function
-      fi
-      mv "$TMPFILE" "$TARGET"
     else
       echo "$CURRENT_CONTENT" >> "$TARGET"
+      UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
     fi
+  fi
+
+  # Clean up trailing comma
+  UPDATED_FILES="${UPDATED_FILES%, }"
+
+  if [ -n "$UPDATED_FILES" ]; then
+    tandem_log info "profile updated: ${UPDATED_FILES}"
   fi
 
   # Write nudge for next session if present
@@ -535,6 +508,38 @@ Review the session and extract learnings now."
   fi
 }
 
+# ─── Phase 0: Commits — checkpoint session context to git ─────────────────
+
+checkpoint_commit() {
+  [ "${TANDEM_AUTO_COMMIT:-1}" = "0" ] && { tandem_log debug "auto-commit disabled"; return 0; }
+  git -C "$CWD" rev-parse --git-dir &>/dev/null || { tandem_log debug "not a git repo, skipping checkpoint"; return 0; }
+
+  local progress
+  progress=$(tail -100 "$MEMORY_DIR/progress.md" 2>/dev/null)
+  [ -z "$progress" ] && { tandem_log debug "no progress content for checkpoint"; return 0; }
+
+  local body
+  body=$(printf '%s\n\nTandem-Auto-Commit: true' "$progress")
+
+  git -C "$CWD" add -u 2>/dev/null
+
+  if git -C "$CWD" diff --cached --quiet 2>/dev/null; then
+    tandem_log info "checkpoint: empty commit (no staged changes)"
+    git -C "$CWD" commit --allow-empty \
+      -m "$(printf 'chore(tandem): session context\n\n%s' "$body")" 2>/dev/null || {
+      tandem_log warn "checkpoint empty commit failed"
+      return 1
+    }
+  else
+    tandem_log info "checkpoint: committing staged changes"
+    git -C "$CWD" commit \
+      -m "$(printf 'chore(tandem): session checkpoint\n\n%s' "$body")" 2>/dev/null || {
+      tandem_log warn "checkpoint commit failed"
+      return 1
+    }
+  fi
+}
+
 # ─── Phase 3: Global activity — cross-project rolling log ─────────────────
 
 global_activity() {
@@ -554,10 +559,10 @@ ${SUMMARY}
 
   mkdir -p "$GLOBAL_DIR"
 
-  # Prepend new entry and cap at 30 entries with validation
+  # Prepend new entry and cap at 30 entries
   TMPFILE=$(mktemp "$GLOBAL_DIR/global.md.XXXXXX")
   if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
-    echo "[Tandem] Warning: failed to create temp file for global.md" >&2
+    tandem_log warn "failed to create temp file for cross-project activity log"
     return 1
   fi
 
@@ -570,37 +575,43 @@ ${SUMMARY}
   ' > "$TMPFILE"
 
   if [ $? -ne 0 ] || [ ! -s "$TMPFILE" ]; then
-    echo "[Tandem] Warning: failed to write global.md temp file" >&2
+    tandem_log warn "failed to write cross-project activity log"
     rm -f "$TMPFILE"
     return 1
   fi
 
   mv "$TMPFILE" "$GLOBAL_FILE"
+  tandem_log info "cross-project activity logged"
 }
 
 # ─── Worker execution (only reached in --worker mode) ──────────────────────
 
+CHECKPOINT_STATUS=0
 RECALL_STATUS=0
 GROW_STATUS=0
 GLOBAL_STATUS=0
 
-recall_compact && RECALL_STATUS=1
-grow_extract && GROW_STATUS=1
-global_activity && GLOBAL_STATUS=1
+checkpoint_commit && CHECKPOINT_STATUS=1   # Phase 0: preserve context to git
+recall_compact && RECALL_STATUS=1          # Phase 1: compact MEMORY.md
+grow_extract && GROW_STATUS=1              # Phase 2: extract learnings to profile
+global_activity && GLOBAL_STATUS=1         # Phase 3: cross-project log
 
 # Only delete progress.md if both critical phases succeeded
 if [ "$RECALL_STATUS" -eq 1 ] && [ "$GROW_STATUS" -eq 1 ]; then
   rm -f "$MEMORY_DIR/progress.md"
+  tandem_log info "session end complete (recall: ok, grow: ok)"
 else
   echo "" >> "$MEMORY_DIR/progress.md"
   echo "## Session End Partial Failure ($(date +%Y-%m-%d))" >> "$MEMORY_DIR/progress.md"
   echo "Recall completed: $RECALL_STATUS, Grow completed: $GROW_STATUS" >> "$MEMORY_DIR/progress.md"
+  tandem_log warn "session end partial failure (recall: ${RECALL_STATUS}, grow: ${GROW_STATUS})"
 fi
 
 # Write recap for next session
 RECAP_FILE="$HOME/.tandem/.last-session-recap"
 cat > "$RECAP_FILE" <<RECAP_EOF
 date: $TODAY
+checkpoint_status: $CHECKPOINT_STATUS
 recall_status: $RECALL_STATUS
 grow_status: $GROW_STATUS
 global_status: $GLOBAL_STATUS

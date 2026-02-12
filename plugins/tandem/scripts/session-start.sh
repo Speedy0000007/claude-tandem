@@ -1,16 +1,13 @@
 #!/bin/bash
 # SessionStart hook: first-run provisioning + stale progress detection + status indicators.
 # Outputs to stdout are injected into Claude's context.
-
-if ! command -v jq &>/dev/null; then
-  echo "[Tandem] Error: jq not found" >&2
-  echo "  Tandem requires jq for JSON parsing." >&2
-  echo "  Install: brew install jq (macOS) | apt install jq (Linux)" >&2
-  echo "  Verify: jq --version" >&2
-  exit 0
-fi
+#
+# Output format: single ◎╵═╵◎ header line, then plain detail lines underneath.
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}"
+source "$PLUGIN_ROOT/lib/tandem.sh"
+
+tandem_require_jq
 
 # Read hook input from stdin
 INPUT=$(cat)
@@ -25,12 +22,16 @@ PROFILE_DIR="${TANDEM_PROFILE_DIR:-$HOME/.tandem/profile}"
 RULES_DIR="$HOME/.claude/rules"
 MARKER_FILE="$HOME/.tandem/.provisioned"
 
-# --- First-run provisioning (only if never provisioned before) ---
+# ==========================================================================
+# Phase 1: Silent work (no output)
+# ==========================================================================
 
+# --- First-run provisioning ---
+
+FIRST_RUN=0
 if [ ! -f "$MARKER_FILE" ]; then
   PROVISIONED=0
 
-  # Provision rules files
   if [ -f "$PLUGIN_ROOT/rules/tandem-recall.md" ]; then
     mkdir -p "$RULES_DIR"
     cp "$PLUGIN_ROOT/rules/tandem-recall.md" "$RULES_DIR/tandem-recall.md"
@@ -43,7 +44,18 @@ if [ ! -f "$MARKER_FILE" ]; then
     PROVISIONED=1
   fi
 
-  # Provision profile directory
+  if [ -f "$PLUGIN_ROOT/rules/tandem-display.md" ]; then
+    mkdir -p "$RULES_DIR"
+    cp "$PLUGIN_ROOT/rules/tandem-display.md" "$RULES_DIR/tandem-display.md"
+    PROVISIONED=1
+  fi
+
+  if [ -f "$PLUGIN_ROOT/rules/tandem-commits.md" ]; then
+    mkdir -p "$RULES_DIR"
+    cp "$PLUGIN_ROOT/rules/tandem-commits.md" "$RULES_DIR/tandem-commits.md"
+    PROVISIONED=1
+  fi
+
   if [ ! -d "$PROFILE_DIR" ]; then
     mkdir -p "$PROFILE_DIR"
     if [ -f "$PLUGIN_ROOT/templates/career-context.md" ]; then
@@ -55,35 +67,12 @@ if [ ! -f "$MARKER_FILE" ]; then
   if [ "$PROVISIONED" -eq 1 ]; then
     mkdir -p "$(dirname "$MARKER_FILE")"
     date +%s > "$MARKER_FILE"
-
-    cat <<'EOF'
-
-╭─ Welcome to Tandem ──────────────────────────────────╮
-│                                                       │
-│ Your learning infrastructure is ready:               │
-│                                                       │
-│ ✓ Clarify — Better prompts, automatically            │
-│ ✓ Recall — Memory that compounds across sessions     │
-│ ✓ Grow — Technical profile built from your work      │
-│                                                       │
-│ Getting started:                                      │
-│ 1. Fill in ~/.tandem/profile/career-context.md       │
-│    (tells Tandem what you want to learn)             │
-│                                                       │
-│ 2. Just work normally — Tandem runs in background    │
-│                                                       │
-│ 3. After a few sessions, run /tandem:grow gaps       │
-│    to see personalized learning opportunities        │
-│                                                       │
-│ Run /tandem:status anytime to check what's happening │
-│                                                       │
-╰──────────────────────────────────────────────────────╯
-
-EOF
+    tandem_log info "provisioned rules and profile"
+    FIRST_RUN=1
   fi
 fi
 
-# --- Initialize stats (outside first-run — runs whenever stats.json is missing) ---
+# --- Initialize stats ---
 
 if [ ! -f "$HOME/.tandem/state/stats.json" ]; then
   mkdir -p "$HOME/.tandem/state"
@@ -110,12 +99,12 @@ if [ -n "$PLUGIN_VERSION" ]; then
     SOURCE="$PLUGIN_ROOT/rules/$BASENAME"
     [ -f "$SOURCE" ] || continue
 
-    # Check version comment in installed rules file
     INSTALLED_VER=$(head -1 "$RULES_FILE" | sed -n 's/.*<!-- tandem v\([^ ]*\) -->.*/\1/p')
     SOURCE_VER=$(head -1 "$SOURCE" | sed -n 's/.*<!-- tandem v\([^ ]*\) -->.*/\1/p')
 
     if [ -n "$SOURCE_VER" ] && [ "$INSTALLED_VER" != "$SOURCE_VER" ]; then
       cp "$SOURCE" "$RULES_FILE"
+      tandem_log info "upgraded rules file: $BASENAME ($INSTALLED_VER -> $SOURCE_VER)"
     fi
   done
 fi
@@ -123,71 +112,66 @@ fi
 # --- CLAUDE.md section injection ---
 
 CLAUDE_MD="$HOME/.claude/CLAUDE.md"
-TANDEM_VERSION="v1.1.0"
+TANDEM_VERSION="v${PLUGIN_VERSION:-1.2.0}"
 TANDEM_SECTION="<!-- tandem:start ${TANDEM_VERSION} -->
 ## Tandem — Session Progress
 After completing significant work steps (features, fixes, decisions), append a brief note to progress.md in your auto-memory directory. Include: what was done, key decisions, outcome. One or two lines per step. Create progress.md on your first significant action if it doesn't exist. This enables memory continuity between sessions.
 <!-- tandem:end -->"
 
 if [ ! -f "$CLAUDE_MD" ]; then
-  # Create CLAUDE.md with just the Tandem section
   mkdir -p "$(dirname "$CLAUDE_MD")"
   TMPFILE=$(mktemp)
-  if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
-    echo "[Tandem] Warning: failed to create temp file for CLAUDE.md" >&2
-  else
+  if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
     printf '%s\n' "$TANDEM_SECTION" > "$TMPFILE"
     if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
       mv "$TMPFILE" "$CLAUDE_MD"
     else
-      echo "[Tandem] Warning: failed to write CLAUDE.md temp file" >&2
+      tandem_log warn "failed to write CLAUDE.md temp file"
       rm -f "$TMPFILE"
     fi
+  else
+    tandem_log warn "failed to create temp file for CLAUDE.md"
   fi
 elif ! grep -q '<!-- tandem:start' "$CLAUDE_MD"; then
-  # Marker absent — append the section
   TMPFILE=$(mktemp)
-  if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
-    echo "[Tandem] Warning: failed to create temp file for CLAUDE.md" >&2
-  else
+  if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
     cp "$CLAUDE_MD" "$TMPFILE"
     printf '\n%s\n' "$TANDEM_SECTION" >> "$TMPFILE"
     if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
       mv "$TMPFILE" "$CLAUDE_MD"
     else
-      echo "[Tandem] Warning: failed to write CLAUDE.md temp file" >&2
+      tandem_log warn "failed to write CLAUDE.md temp file"
       rm -f "$TMPFILE"
     fi
+  else
+    tandem_log warn "failed to create temp file for CLAUDE.md"
   fi
 else
-  # Marker present — check version
   INSTALLED_TANDEM_VER=$(sed -n 's/.*<!-- tandem:start \(v[^ ]*\) -->.*/\1/p' "$CLAUDE_MD")
   if [ "$INSTALLED_TANDEM_VER" != "$TANDEM_VERSION" ]; then
     TMPFILE=$(mktemp)
-    if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
-      echo "[Tandem] Warning: failed to create temp file for CLAUDE.md version update" >&2
-    else
-      awk -v section="$TANDEM_SECTION" '
+    if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
+      TANDEM_SECTION="$TANDEM_SECTION" awk '
         /<!-- tandem:start/ { skip=1; printed=0; next }
-        /<!-- tandem:end -->/ { if (!printed) { print section; printed=1 }; skip=0; next }
+        /<!-- tandem:end -->/ { if (!printed) { print ENVIRON["TANDEM_SECTION"]; printed=1 }; skip=0; next }
         !skip { print }
       ' "$CLAUDE_MD" > "$TMPFILE"
       if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
         mv "$TMPFILE" "$CLAUDE_MD"
       else
-        echo "[Tandem] Warning: failed to write CLAUDE.md version update" >&2
+        tandem_log warn "failed to write CLAUDE.md version update"
         rm -f "$TMPFILE"
       fi
+    else
+      tandem_log warn "failed to create temp file for CLAUDE.md version update"
     fi
   fi
 fi
 
-# --- Post-compaction state recovery ---
+# --- Post-compaction state recovery (outputs directly, before Tandem block) ---
 
 if [ -f "$MEMORY_DIR/progress.md" ] && grep -q '## Pre-compaction State' "$MEMORY_DIR/progress.md"; then
-  # Extract the state section content
   STATE_CONTENT=$(sed -n '/^## Pre-compaction State$/,/^## /{ /^## Pre-compaction State$/d; /^## /d; p; }' "$MEMORY_DIR/progress.md")
-  # If state section is the last section, grab to end of file
   if [ -z "$STATE_CONTENT" ]; then
     STATE_CONTENT=$(sed -n '/^## Pre-compaction State$/,$p' "$MEMORY_DIR/progress.md" | tail -n +2)
   fi
@@ -197,78 +181,24 @@ if [ -f "$MEMORY_DIR/progress.md" ] && grep -q '## Pre-compaction State' "$MEMOR
     echo "$STATE_CONTENT"
   fi
 
-  # Strip the section from progress.md (atomic rewrite with validation)
   TMPFILE=$(mktemp)
-  if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
-    echo "[Tandem] Warning: failed to create temp file for progress.md state cleanup" >&2
-  else
+  if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
     sed '/^## Pre-compaction State$/,$d' "$MEMORY_DIR/progress.md" > "$TMPFILE"
     if [ $? -eq 0 ]; then
-      # Remove trailing blank lines
       sed -i.bak -e :a -e '/^\n*$/{$d;N;ba;}' "$TMPFILE" 2>/dev/null || sed -e :a -e '/^\n*$/{$d;N;ba;}' "$TMPFILE" > "${TMPFILE}.clean" && mv "${TMPFILE}.clean" "$TMPFILE"
       rm -f "${TMPFILE}.bak"
       mv "$TMPFILE" "$MEMORY_DIR/progress.md"
     else
-      echo "[Tandem] Warning: failed to strip state section from progress.md" >&2
+      tandem_log warn "failed to strip state section from progress.md"
       rm -f "$TMPFILE"
     fi
+  else
+    tandem_log warn "failed to create temp file for progress.md state cleanup"
   fi
 fi
 
-# --- Recurrence theme alerts ---
+# --- Increment session stats ---
 
-RECURRENCE_FILE="$HOME/.tandem/state/recurrence.json"
-if [ -f "$RECURRENCE_FILE" ]; then
-  PROMOTIONS=$(jq -r '
-    [.themes | to_entries[] | select(.value.count >= 3) | "\(.key) (\(.value.count) sessions)"]
-    | join(", ")
-  ' "$RECURRENCE_FILE" 2>/dev/null)
-  if [ -n "$PROMOTIONS" ]; then
-    cat <<EOF
-
-╭─ Recurring Pattern Detected ─────────────────────────╮
-│ ${PROMOTIONS}
-│
-│ These patterns keep showing up across your sessions.
-│ Ready to make them permanent in CLAUDE.md?
-│
-│ This means:
-│ → Automatic reminders when relevant
-│ → Less repeated friction
-│ → Better muscle memory
-│
-│ Run: /tandem:recall promote <theme-slug>
-╰──────────────────────────────────────────────────────╯
-
-EOF
-  fi
-fi
-
-# --- Session stats tracking and milestones ---
-
-# Function to celebrate milestones
-celebrate_milestone() {
-  local MILESTONE=$1
-  local STATS=$2
-  local COMPACTIONS=$(echo "$STATS" | jq -r '.compactions')
-  local UPDATES=$(echo "$STATS" | jq -r '.profile_updates')
-  local PROFILE_LINES=$(echo "$STATS" | jq -r '.profile_total_lines')
-
-  cat <<EOF
-
-╭─────────────────────────────────────────────────────╮
-│ 🎉 ${MILESTONE} Sessions with Tandem!
-│
-│ Your profile has grown to ${PROFILE_LINES} lines.
-│ You've compacted ${COMPACTIONS} times and made ${UPDATES} profile updates.
-│
-│ That's real momentum. Keep going.
-╰─────────────────────────────────────────────────────╯
-
-EOF
-}
-
-# Increment session count and check for milestones
 STATS_FILE="$HOME/.tandem/state/stats.json"
 if [ -f "$STATS_FILE" ]; then
   NEW_STATS=$(jq --arg today "$(date +%Y-%m-%d)" '
@@ -283,7 +213,6 @@ if [ -f "$STATS_FILE" ]; then
     .previous_session = $today
   ' "$STATS_FILE")
 
-  # Atomic write
   TMPFILE=$(mktemp "$STATS_FILE.XXXXXX")
   if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
     echo "$NEW_STATS" > "$TMPFILE"
@@ -293,87 +222,107 @@ if [ -f "$STATS_FILE" ]; then
       rm -f "$TMPFILE"
     fi
   fi
+fi
 
-  # Check for milestone celebrations
+# --- MEMORY.md corruption detection and rollback ---
+
+if [ -f "$MEMORY_DIR/MEMORY.md" ]; then
+  LINE_COUNT=$(wc -l < "$MEMORY_DIR/MEMORY.md" | tr -d ' ')
+  REFUSAL_PATTERN=$(head -1 "$MEMORY_DIR/MEMORY.md" | grep -qiE '^(I cannot|I'"'"'m sorry|I am sorry|As an AI)' && echo 1 || echo 0)
+
+  if [ "$LINE_COUNT" -lt 5 ] || [ "$REFUSAL_PATTERN" -eq 1 ]; then
+    LATEST_BACKUP=$(ls -t "$MEMORY_DIR"/.MEMORY.md.backup-* 2>/dev/null | head -1)
+    if [ -n "$LATEST_BACKUP" ]; then
+      tandem_log warn "corrupted MEMORY.md detected (${LINE_COUNT} lines). Rolling back to backup."
+      mv "$LATEST_BACKUP" "$MEMORY_DIR/MEMORY.md"
+      MEMORY_ROLLED_BACK=1
+    else
+      tandem_log warn "corrupted MEMORY.md detected but no backup available"
+    fi
+  fi
+fi
+
+# ==========================================================================
+# Phase 2: Output (header line first, then plain detail lines)
+# ==========================================================================
+
+# --- Header (always first, always output) ---
+
+tandem_header
+
+# --- Detail lines (plain, no logo) ---
+
+# First run welcome
+if [ "$FIRST_RUN" -eq 1 ]; then
+  echo "Welcome! Run /tandem:status to get started."
+fi
+
+# Corruption rollback notice
+if [ "${MEMORY_ROLLED_BACK:-0}" -eq 1 ]; then
+  echo "Corrupted MEMORY.md detected. Rolled back to backup."
+fi
+
+# Milestones
+if [ -n "${NEW_STATS:-}" ]; then
   TOTAL=$(echo "$NEW_STATS" | jq -r '.total_sessions')
   MILESTONES_HIT=$(echo "$NEW_STATS" | jq -r '.milestones_hit | join(",")')
 
   for MILESTONE in 10 50 100 500 1000; do
     if [ "$TOTAL" -eq "$MILESTONE" ] && ! echo "$MILESTONES_HIT" | grep -q "$MILESTONE"; then
-      celebrate_milestone "$MILESTONE" "$NEW_STATS"
-      # Mark milestone as hit
+      COMPACTIONS=$(echo "$NEW_STATS" | jq -r '.compactions')
+      UPDATES=$(echo "$NEW_STATS" | jq -r '.profile_updates')
+      PROFILE_LINES=$(echo "$NEW_STATS" | jq -r '.profile_total_lines')
+      echo "Milestone: ${MILESTONE} sessions! Profile: ${PROFILE_LINES} lines, ${COMPACTIONS} compactions, ${UPDATES} profile updates."
       jq ".milestones_hit += [\"$MILESTONE\"]" "$STATS_FILE" > "$STATS_FILE.tmp"
       mv "$STATS_FILE.tmp" "$STATS_FILE"
     fi
   done
 
-  # Check for learning streak
+  # Learning streak
   STREAK=$(echo "$NEW_STATS" | jq -r '.streak_current')
   if [ "$STREAK" -ge 5 ] && [ $(($STREAK % 5)) -eq 0 ]; then
-    cat <<EOF
-
-🔥 ${STREAK}-session learning streak!
-
-Your profile has been updated in ${STREAK} consecutive sessions.
-That's how expertise compounds.
-
-EOF
+    echo "${STREAK}-session streak!"
   fi
 fi
 
-# --- Last session recap ---
-
-# Show last session recap if available
+# Last session recap
 RECAP_FILE="$HOME/.tandem/.last-session-recap"
 if [ -f "$RECAP_FILE" ]; then
-  RECAP_DATE=$(grep '^date:' "$RECAP_FILE" | cut -d' ' -f2)
   RECALL=$(grep '^recall_status: 1' "$RECAP_FILE" &>/dev/null && echo 1 || echo 0)
   GROW=$(grep '^grow_status: 1' "$RECAP_FILE" &>/dev/null && echo 1 || echo 0)
 
   if [ "$RECALL" -eq 1 ] || [ "$GROW" -eq 1 ]; then
-    echo ""
-    echo "Last session ($RECAP_DATE):"
-
+    RECAP_MSG="Last session: "
     if [ "$RECALL" -eq 1 ]; then
       LINES=$(grep '^memory_lines:' "$RECAP_FILE" | cut -d' ' -f2)
-      echo "  ✓ Recalled (MEMORY.md: ${LINES} lines)"
+      RECAP_MSG="${RECAP_MSG}memory compacted (${LINES} lines)"
     fi
-
     if [ "$GROW" -eq 1 ]; then
       FILES=$(grep '^profile_files:' "$RECAP_FILE" | cut -d' ' -f2-)
+      if [ "$RECALL" -eq 1 ]; then RECAP_MSG="${RECAP_MSG}. "; fi
       if [ -n "$FILES" ]; then
-        echo "  ✓ Grown (updated: $FILES)"
+        RECAP_MSG="${RECAP_MSG}Profile updated: ${FILES}"
       else
-        echo "  ✓ Grown (profile updated)"
+        RECAP_MSG="${RECAP_MSG}Profile updated"
       fi
     fi
-    echo ""
+    echo "$RECAP_MSG"
   fi
 
-  # Clean up recap file
   rm -f "$RECAP_FILE"
 fi
 
-# Check for recent SessionEnd errors
-ERROR_LOG="$HOME/.tandem/logs/session-end-errors.log"
-if [ -f "$ERROR_LOG" ]; then
-  # Check if errors written in last 24h
-  RECENT_ERRORS=$(find "$ERROR_LOG" -mtime -1 2>/dev/null)
-  if [ -n "$RECENT_ERRORS" ]; then
-    ERROR_COUNT=$(tail -100 "$ERROR_LOG" | grep -c '\[Tandem.*Error\]' || echo 0)
-    if [ "$ERROR_COUNT" -gt 0 ]; then
-      echo "⚠️  SessionEnd errors detected (${ERROR_COUNT} in last 24h)"
-      echo "   Check: $ERROR_LOG"
-      echo ""
-    fi
+# Health check (only errors from current version)
+TANDEM_LOG="$HOME/.tandem/logs/tandem.log"
+if [ -f "$TANDEM_LOG" ] && [ -n "$PLUGIN_VERSION" ]; then
+  ISSUE_COUNT=$(grep -c "\[$PLUGIN_VERSION\].*\(\[ERROR\]\|\[WARN \]\)" "$TANDEM_LOG" 2>/dev/null || echo 0)
+  if [ "$ISSUE_COUNT" -gt 0 ]; then
+    echo "${ISSUE_COUNT} issue(s) logged. Run /tandem:logs errors to review."
   fi
 fi
 
-# --- Status indicators ---
-
-# Recalled. — previous session was compacted
+# Recalled/Grown indicators
 if [ -f "$MEMORY_DIR/.tandem-last-compaction" ]; then
-  # Check if stats available for enhanced indicator
   if [ -f "$HOME/.tandem/state/stats.json" ]; then
     TOTAL_COMPACTIONS=$(jq -r '.compactions' "$HOME/.tandem/state/stats.json")
     PROFILE_LINES=$(jq -r '.profile_total_lines' "$HOME/.tandem/state/stats.json")
@@ -384,7 +333,6 @@ if [ -f "$MEMORY_DIR/.tandem-last-compaction" ]; then
   rm -f "$MEMORY_DIR/.tandem-last-compaction"
 fi
 
-# Grown. — learning nudge from previous session
 NUDGE_FILE="$HOME/.tandem/next-nudge"
 if [ -f "$NUDGE_FILE" ]; then
   NUDGE_CONTENT=$(cat "$NUDGE_FILE")
@@ -395,16 +343,24 @@ if [ -f "$NUDGE_FILE" ]; then
   rm -f "$NUDGE_FILE"
 fi
 
-# --- Cross-project context ---
+# Recurrence alerts
+RECURRENCE_FILE="$HOME/.tandem/state/recurrence.json"
+if [ -f "$RECURRENCE_FILE" ]; then
+  PROMOTIONS=$(jq -r '
+    [.themes | to_entries[] | select(.value.count >= 3) | "\(.key) (\(.value.count) sessions)"]
+    | join(", ")
+  ' "$RECURRENCE_FILE" 2>/dev/null)
+  if [ -n "$PROMOTIONS" ]; then
+    echo "Recurring: ${PROMOTIONS}. Run /tandem:recall promote to make permanent."
+  fi
+fi
 
+# Cross-project context
 GLOBAL_FILE="$HOME/.tandem/memory/global.md"
 if [ -f "$GLOBAL_FILE" ]; then
   PROJECT_NAME=$(basename "$CWD")
-  # Extract recent entries for OTHER projects (up to 5)
-  # Normalize em/en-dash variants to --, then parse with portable awk
   OTHER_ENTRIES=$(sed 's/ [–—] / -- /g' "$GLOBAL_FILE" | awk -v proj="$PROJECT_NAME" '
     /^## / {
-      # Parse "## YYYY-MM-DD -- project-name"
       sub(/^## /, "")
       idx = index($0, " -- ")
       if (idx > 0) {
@@ -426,49 +382,30 @@ if [ -f "$GLOBAL_FILE" ]; then
   if [ -n "$OTHER_ENTRIES" ]; then
     echo ""
     echo "Context from other projects:"
-    echo ""
-
-    # Add visual indicators
-    echo "$OTHER_ENTRIES" | while IFS= read -r entry; do
-      echo "🔹 $entry"
-    done
-
-    echo ""
-    echo "(Full global memory: /tandem:status --global)"
+    echo "$OTHER_ENTRIES"
   fi
 fi
 
-# --- Stale progress detection ---
-
+# Stale progress detection
 if [ -f "$MEMORY_DIR/progress.md" ]; then
-  # Check if progress.md was modified before this session (stale = from a previous session)
   PROGRESS_MTIME=$(stat -f '%m' "$MEMORY_DIR/progress.md" 2>/dev/null || stat -c '%Y' "$MEMORY_DIR/progress.md" 2>/dev/null)
   SESSION_START=$(date +%s)
 
-  # If progress.md is more than 5 minutes old, it's from a previous session
   if [ -n "$PROGRESS_MTIME" ]; then
     AGE=$((SESSION_START - PROGRESS_MTIME))
     if [ "$AGE" -gt 300 ]; then
-      echo "[Tandem] Stale progress.md detected from a previous session (background work may still be running, or SessionEnd hook didn't complete). Contents preserved — review and incorporate relevant context."
+      echo "Stale progress.md detected. Review and incorporate context."
     fi
   fi
 fi
 
-# --- MEMORY.md corruption detection and rollback ---
-
-if [ -f "$MEMORY_DIR/MEMORY.md" ]; then
-  LINE_COUNT=$(wc -l < "$MEMORY_DIR/MEMORY.md" | tr -d ' ')
-  REFUSAL_PATTERN=$(head -1 "$MEMORY_DIR/MEMORY.md" | grep -qiE '^(I cannot|I'"'"'m sorry|I am sorry|As an AI)' && echo 1 || echo 0)
-
-  # If MEMORY.md is suspiciously short or starts with a refusal, roll back to latest backup
-  if [ "$LINE_COUNT" -lt 5 ] || [ "$REFUSAL_PATTERN" -eq 1 ]; then
-    LATEST_BACKUP=$(ls -t "$MEMORY_DIR"/.MEMORY.md.backup-* 2>/dev/null | head -1)
-    if [ -n "$LATEST_BACKUP" ]; then
-      echo "[Tandem] Corrupted MEMORY.md detected (${LINE_COUNT} lines, refusal pattern: ${REFUSAL_PATTERN}). Rolling back to backup from $(date -r "$LATEST_BACKUP" '+%Y-%m-%d %H:%M' 2>/dev/null || date -d "@$(stat -c %Y "$LATEST_BACKUP")" '+%Y-%m-%d %H:%M' 2>/dev/null)."
-      mv "$LATEST_BACKUP" "$MEMORY_DIR/MEMORY.md"
-    else
-      echo "[Tandem] Warning: MEMORY.md appears corrupted but no backup available." >&2
-    fi
+# Tandem checkpoint detection
+if git -C "$CWD" rev-parse --git-dir &>/dev/null; then
+  LAST_MSG=$(git -C "$CWD" log -1 --format="%s" 2>/dev/null)
+  LAST_HASH=$(git -C "$CWD" log -1 --format="%h" 2>/dev/null)
+  if [[ "$LAST_MSG" == "chore(tandem): session checkpoint" ]] || \
+     [[ "$LAST_MSG" == "chore(tandem): session context" ]]; then
+    echo "Last session checkpoint: ${LAST_HASH}. Review or amend before starting new work."
   fi
 fi
 

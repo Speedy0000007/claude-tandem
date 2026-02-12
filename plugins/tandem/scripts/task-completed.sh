@@ -3,13 +3,10 @@
 # Outputs a systemMessage to stdout only when progress.md is stale.
 # No LLM call — just a file stat check.
 
-if ! command -v jq &>/dev/null; then
-  echo "[Tandem] Error: jq not found" >&2
-  echo "  Tandem requires jq for JSON parsing." >&2
-  echo "  Install: brew install jq (macOS) | apt install jq (Linux)" >&2
-  echo "  Verify: jq --version" >&2
-  exit 0
-fi
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}"
+source "$PLUGIN_ROOT/lib/tandem.sh"
+
+tandem_require_jq
 
 # Read hook input from stdin
 INPUT=$(cat)
@@ -27,7 +24,10 @@ if [ -f "$MEMORY_DIR/progress.md" ]; then
   NOW=$(date +%s)
   if [ -n "$PROGRESS_MTIME" ]; then
     AGE=$((NOW - PROGRESS_MTIME))
-    [ "$AGE" -le 300 ] && exit 0
+    if [ "$AGE" -le 300 ]; then
+      tandem_log debug "progress fresh, no nudge"
+      exit 0
+    fi
   fi
 fi
 
@@ -37,6 +37,7 @@ if [ -n "$TASK_SUBJECT" ]; then
   SUBJECT_MSG="Task '${TASK_SUBJECT}' was just completed. "
 fi
 
+tandem_log debug "progress nudge sent"
 echo "{\"systemMessage\": \"${SUBJECT_MSG}Update progress.md in your auto-memory directory with what was done and key decisions.\"}"
 
 exit 0

@@ -10,6 +10,8 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}"
 HOOKS_FILE="$PLUGIN_ROOT/hooks/hooks.json"
 STATS_FILE="$HOME/.tandem/state/stats.json"
 
+source "$PLUGIN_ROOT/lib/tandem.sh"
+
 # --- Logo + Version ---
 
 VERSION=$(jq -r '.version // "unknown"' "$PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null)
@@ -151,16 +153,22 @@ if [ -f "$STATS_FILE" ]; then
   fi
 fi
 
-# --- Errors ---
+# --- Log info ---
 
-ERROR_LOG="$HOME/.tandem/logs/session-end-errors.log"
-if [ -f "$ERROR_LOG" ]; then
-  RECENT=$(find "$ERROR_LOG" -mtime -1 2>/dev/null)
-  if [ -n "$RECENT" ]; then
-    ERROR_COUNT=$(tail -100 "$ERROR_LOG" | grep -c '\[Tandem.*Error\]' 2>/dev/null || echo 0)
-    if [ "$ERROR_COUNT" -gt 0 ]; then
-      echo ""
-      echo "Errors: ${ERROR_COUNT} in last 24h (check: ${ERROR_LOG})"
-    fi
+TANDEM_LOG="$HOME/.tandem/logs/tandem.log"
+echo ""
+echo "Log: ${TANDEM_LOG}"
+echo "  Level: ${TANDEM_LOG_LEVEL:-info} (set TANDEM_LOG_LEVEL to change)"
+if [ -f "$TANDEM_LOG" ]; then
+  LOG_LINES=$(wc -l < "$TANDEM_LOG" | tr -d ' ')
+  YESTERDAY=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d '1 day ago' +%Y-%m-%d 2>/dev/null)
+  ERROR_COUNT=0
+  WARN_COUNT=0
+  if [ -n "$YESTERDAY" ]; then
+    ERROR_COUNT=$(awk -v cutoff="$YESTERDAY" '$1 >= cutoff && /\[ERROR\]/ { count++ } END { print count+0 }' "$TANDEM_LOG")
+    WARN_COUNT=$(awk -v cutoff="$YESTERDAY" '$1 >= cutoff && /\[WARN \]/ { count++ } END { print count+0 }' "$TANDEM_LOG")
   fi
+  echo "  Entries: ${LOG_LINES} total, ${ERROR_COUNT} errors / ${WARN_COUNT} warnings (24h)"
+else
+  echo "  No log file yet"
 fi

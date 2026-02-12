@@ -8,6 +8,7 @@ Tandem uses environment variables to control behavior across its three features 
 |----------|---------|---------|---------|
 | `TANDEM_CLARIFY_MIN_LENGTH` | `200` | Minimum prompt character count before Clarify assessment | `500` (skip short prompts) |
 | `TANDEM_CLARIFY_QUIET` | `0` | Suppress "Clarified." status indicator | `1` (silent mode) |
+| `TANDEM_LOG_LEVEL` | `info` | Log verbosity: `error`, `warn`, `info`, `debug` | `debug` (verbose for troubleshooting) |
 | `TANDEM_PROFILE_DIR` | `~/.tandem/profile` | Location for learning profile files (Grow) | `~/Dropbox/tandem` (sync across machines) |
 | `TANDEM_QUIET` | `0` | Suppress all Tandem status output | `1` (dogfooding mode) |
 
@@ -154,6 +155,7 @@ Tandem never writes to user repositories. All data goes to Claude Code's native 
 | `~/.tandem/profile/*.md` | User's learning profile (Grow) |
 | `~/.tandem/memory/global.md` | Cross-project activity log (30 entries max) |
 | `~/.tandem/state/recurrence.json` | Recurring theme tracker |
+| `~/.tandem/logs/tandem.log` | Unified activity/error log (all hooks) |
 | `~/.tandem/logs/clarify.jsonl` | Clarify decision log (for review) |
 | `~/.tandem/.provisioned` | First-run marker file |
 | `~/.tandem/next-nudge` | Ephemeral learning nudge for next session |
@@ -201,22 +203,20 @@ Every UserPromptSubmit hook writes a JSON line to `~/.tandem/logs/clarify.jsonl`
 
 Actions: `skip` (prompt already clear) or `restructured` (Haiku rewrote it)
 
-**Hook failures:**
+**Unified log:**
 
-All scripts exit 0 on all paths — hook failures are silent to avoid interrupting user flow. Check stderr for warnings:
+All hook diagnostics write to `~/.tandem/logs/tandem.log`. Hooks never write to stderr. Format:
 
-```bash
-# Run hooks manually to see stderr
-echo '{"cwd":"'$PWD'"}' | ./plugins/tandem/scripts/session-start.sh 2>&1
 ```
+2026-02-12 10:30:45 [INFO ] [session-start] provisioned rules files
+2026-02-12 10:30:46 [ERROR] [session-end] compaction failed: LLM returned empty
+```
+
+View with `/tandem:logs` or `/tandem:logs errors`. Set `TANDEM_LOG_LEVEL=debug` for verbose output.
 
 **Memory corruption recovery:**
 
-SessionStart detects corrupted MEMORY.md (< 5 lines, starts with refusal pattern) and rolls back to the latest backup:
-
-```
-[Tandem] Corrupted MEMORY.md detected (3 lines, refusal pattern: 1). Rolling back to backup from 2026-02-10 18:42.
-```
+SessionStart detects corrupted MEMORY.md (< 5 lines, starts with refusal pattern) and rolls back to the latest backup.
 
 Backups: `~/.claude/projects/<cwd-sanitized>/memory/.MEMORY.md.backup-<timestamp>` (last 3 kept)
 
@@ -255,6 +255,39 @@ Clarify fires on UserPromptSubmit. To disable:
 2. Remove the UserPromptSubmit hook entry
 3. Or set a very high threshold: `export TANDEM_CLARIFY_MIN_LENGTH=10000`
 
+## Local Development (Plugin Cache Sync)
+
+Claude Code's plugin cache only refreshes on version bumps. For local development, you can symlink your source directory into the cache so changes are live immediately.
+
+### Option 1: Manual sync (mid-session)
+
+Run `/tandem:reload` to create a symlink from the cache to your source directory. Script, skill, and rule changes take effect immediately. Changes to `hooks.json` take effect on next session restart.
+
+### Option 2: Automatic sync (on startup)
+
+Install the sync script as a user-level SessionStart hook:
+
+```bash
+# Copy to user scripts
+cp plugins/tandem/scripts/sync-local-plugins.sh ~/.claude/scripts/
+chmod +x ~/.claude/scripts/sync-local-plugins.sh
+```
+
+Then add to `~/.claude/settings.json` under `hooks`:
+
+```json
+"SessionStart": [{
+  "matcher": "startup",
+  "hooks": [{"type": "command", "command": "$HOME/.claude/scripts/sync-local-plugins.sh"}]
+}]
+```
+
+This runs on every session startup and symlinks all local directory-based marketplace plugins into the cache. It's generic and works for any local plugin, not just Tandem.
+
+**Why user-level (not plugin-level):** User-level hooks always load from disk, never from the plugin cache. A plugin-level sync hook would itself be stale if the cache is stale.
+
+**Why symlinks:** Script changes are instant (resolved from source at runtime). Skills and rules are instant (read on demand). `hooks.json` takes effect on next startup, but the symlink means startup always reads the latest source. Overhead is ~0ms (a readlink check vs file comparison).
+
 ## Hook Script Reference
 
 | Script | Purpose | Link |
@@ -264,6 +297,7 @@ Clarify fires on UserPromptSubmit. To disable:
 | `session-end.sh` | Recall (compaction) + Grow (extraction) | [plugins/tandem/scripts/session-end.sh](/plugins/tandem/scripts/session-end.sh) |
 | `pre-compact.sh` | State snapshot before compaction | [plugins/tandem/scripts/pre-compact.sh](/plugins/tandem/scripts/pre-compact.sh) |
 | `task-completed.sh` | Async progress.md staleness check | [plugins/tandem/scripts/task-completed.sh](/plugins/tandem/scripts/task-completed.sh) |
+| `sync-local-plugins.sh` | Generic plugin cache symlink sync | [plugins/tandem/scripts/sync-local-plugins.sh](/plugins/tandem/scripts/sync-local-plugins.sh) |
 
 ## Next Steps
 

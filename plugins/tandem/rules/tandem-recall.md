@@ -1,4 +1,4 @@
-<!-- tandem v1.1.0 -->
+<!-- tandem v1.2.1 -->
 # Tandem Recall
 
 Maintain progress.md in your auto-memory directory (alongside MEMORY.md) as a running log. The Tandem SessionEnd hook reads this file.
