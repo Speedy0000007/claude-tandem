@@ -140,10 +140,18 @@ Produce the compacted MEMORY.md now."
   tandem_log info "compacting memory"
 
   # Call claude -p with haiku and budget cap
-  RESULT=$(echo "$PROMPT" | claude -p --model haiku --max-budget-usd 0.05 2>/dev/null)
+  # --system-prompt "" --tools "" strips context overhead (CLAUDE.md, MCP servers, skills)
+  # Budget must exceed ~$0.06 base cost of a claude -p invocation
+  RESULT=$(echo "$PROMPT" | claude -p --model haiku --max-budget-usd 0.10 --system-prompt "" --tools "" 2>/dev/null)
 
   if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
     tandem_log error "compaction failed: LLM returned empty (network or API issue)"
+    return 1
+  fi
+
+  # claude -p returns exit 0 even on budget exceeded — check for error prefix
+  if [[ "$RESULT" == Error:* ]]; then
+    tandem_log error "compaction failed: ${RESULT}"
     return 1
   fi
 
@@ -366,10 +374,16 @@ Review the session and extract learnings now."
   tandem_log info "extracting learnings"
 
   # Call claude -p with haiku and budget cap
-  RESULT=$(echo "$PROMPT" | claude -p --model haiku --max-budget-usd 0.05 2>/dev/null)
+  RESULT=$(echo "$PROMPT" | claude -p --model haiku --max-budget-usd 0.10 --system-prompt "" --tools "" 2>/dev/null)
 
   if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
     tandem_log error "extraction failed: LLM returned empty (network or API issue)"
+    return 1
+  fi
+
+  # claude -p returns exit 0 even on budget exceeded — check for error prefix
+  if [[ "$RESULT" == Error:* ]]; then
+    tandem_log error "extraction failed: ${RESULT}"
     return 1
   fi
 

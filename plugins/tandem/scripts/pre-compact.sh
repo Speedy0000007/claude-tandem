@@ -68,10 +68,10 @@ ${TRANSCRIPT_TAIL}
 # Call haiku
 tandem_require_claude || exit 0
 
-RESULT=$(echo "$PROMPT" | claude -p --model haiku --max-budget-usd 0.03 2>/dev/null)
+RESULT=$(TANDEM_WORKER=1 claude -p --model haiku --max-budget-usd 0.10 --system-prompt "" --tools "" 2>/dev/null <<< "$PROMPT")
 
-if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
-  tandem_log warn "pre-compaction state capture failed (network or API issue)"
+if [ $? -ne 0 ] || [ -z "$RESULT" ] || [[ "$RESULT" == Error:* ]]; then
+  tandem_log warn "pre-compaction state capture failed${RESULT:+ ($RESULT)}"
   exit 0
 fi
 
