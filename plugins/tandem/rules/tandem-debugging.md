@@ -5,7 +5,7 @@ When Tandem appears to be in a broken or confused state, check the logs before g
 
 **Symptoms that warrant log inspection:**
 - Missing or corrupted files (progress.md, MEMORY.md, stats.json, profile files)
-- Session count, streaks, or stats looking wrong
+- Session count or stats looking wrong
 - SessionEnd not compacting memory or extracting learnings
 - Hooks not firing or producing unexpected output
 - Any "issue(s) logged" message from the session startup display
