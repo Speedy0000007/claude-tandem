@@ -145,12 +145,7 @@ if [ -f "$STATS_FILE" ]; then
   TOTAL=$(jq -r '.total_sessions' "$STATS_FILE" 2>/dev/null)
   COMPACTIONS=$(jq -r '.compactions' "$STATS_FILE" 2>/dev/null)
   UPDATES=$(jq -r '.profile_updates' "$STATS_FILE" 2>/dev/null)
-  STREAK=$(jq -r '.streak_current' "$STATS_FILE" 2>/dev/null)
-  BEST=$(jq -r '.streak_best' "$STATS_FILE" 2>/dev/null)
   echo "Stats: ${TOTAL} sessions, ${COMPACTIONS} compactions, ${UPDATES} profile updates"
-  if [ "$STREAK" -gt 1 ]; then
-    echo "  Streak: ${STREAK} current (best: ${BEST})"
-  fi
 fi
 
 # --- Log info ---

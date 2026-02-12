@@ -85,8 +85,6 @@ if [ ! -f "$HOME/.tandem/state/stats.json" ]; then
     last_session: (now | strftime("%Y-%m-%d")),
     compactions: 0,
     profile_updates: 0,
-    streak_current: 0,
-    streak_best: 0,
     milestones_hit: [],
     profile_total_lines: 0
   }' > "$HOME/.tandem/state/stats.json"
@@ -206,14 +204,7 @@ STATS_FILE="$HOME/.tandem/state/stats.json"
 if [ -f "$STATS_FILE" ]; then
   NEW_STATS=$(jq --arg today "$(date +%Y-%m-%d)" '
     .total_sessions += 1 |
-    .last_session = $today |
-    if (.last_session == (.previous_session // "")) then
-      .streak_current += 1 |
-      .streak_best = ([.streak_best, .streak_current] | max)
-    else
-      .streak_current = 1
-    end |
-    .previous_session = $today
+    .last_session = $today
   ' "$STATS_FILE")
 
   TMPFILE=$(mktemp "$STATS_FILE.XXXXXX")
@@ -281,11 +272,6 @@ if [ -n "${NEW_STATS:-}" ]; then
     fi
   done
 
-  # Learning streak
-  STREAK=$(echo "$NEW_STATS" | jq -r '.streak_current')
-  if [ "$STREAK" -ge 5 ] && [ $(($STREAK % 5)) -eq 0 ]; then
-    echo "${STREAK}-session streak!"
-  fi
 fi
 
 # Last session recap
@@ -408,7 +394,7 @@ if git -C "$CWD" rev-parse --git-dir &>/dev/null; then
   LAST_HASH=$(git -C "$CWD" log -1 --format="%h" 2>/dev/null)
   if [[ "$LAST_MSG" == "chore(tandem): session checkpoint" ]] || \
      [[ "$LAST_MSG" == "chore(tandem): session context" ]]; then
-    echo "Last session checkpoint: ${LAST_HASH}. Review or amend before starting new work."
+    echo "Last auto-commit: ${LAST_HASH}:${LAST_MSG}. If work was incomplete, amend this commit."
   fi
 fi
 
