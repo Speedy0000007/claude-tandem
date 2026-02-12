@@ -1,31 +1,68 @@
 #!/bin/bash
-# SessionEnd hook: runs compaction (Recall) then extraction (Grow) sequentially.
-# Both depend on progress.md — this script ensures ordering and single cleanup.
+# SessionEnd hook: informs user, then backgrounds compaction (Recall) and extraction (Grow).
+# Sync hook with fast exit — heavy LLM work runs as a named background process.
+#
+# Two modes:
+#   (default)   Hook mode — reads stdin, prints summary, spawns worker, exits
+#   --worker    Worker mode — runs compaction + extraction in background
 
-if ! command -v jq &>/dev/null; then
-  echo "[Tandem] Error: jq not found" >&2
-  echo "  Tandem requires jq for JSON parsing." >&2
-  echo "  Install: brew install jq (macOS) | apt install jq (Linux)" >&2
-  echo "  Verify: jq --version" >&2
+# ─── Worker mode: backgrounded by hook mode ───────────────────────────────
+
+if [ "${1:-}" = "--worker" ]; then
+  CWD="$2"
+  [ -z "$CWD" ] && exit 0
+
+  SANITISED=$(echo "$CWD" | sed 's|/|-|g')
+  MEMORY_DIR="$HOME/.claude/projects/${SANITISED}/memory"
+  [ ! -f "$MEMORY_DIR/progress.md" ] && exit 0
+
+  PROFILE_DIR="${TANDEM_PROFILE_DIR:-$HOME/.tandem/profile}"
+  STATE_DIR="$HOME/.tandem/state"
+  RECURRENCE_FILE="$STATE_DIR/recurrence.json"
+  TODAY=$(date +%Y-%m-%d)
+
+  # Redirect stderr to error log
+  ERROR_LOG="$HOME/.tandem/logs/session-end-errors.log"
+  mkdir -p "$(dirname "$ERROR_LOG")"
+  exec 2>>"$ERROR_LOG"
+
+  # Functions are defined below — execution continues after function definitions
+  TANDEM_WORKER=1
+fi
+
+# ─── Hook mode: parse input, inform user, spawn worker ────────────────────
+
+if [ -z "${TANDEM_WORKER:-}" ]; then
+  if ! command -v jq &>/dev/null; then
+    echo "[Tandem] Error: jq not found" >&2
+    echo "  Tandem requires jq for JSON parsing." >&2
+    echo "  Install: brew install jq (macOS) | apt install jq (Linux)" >&2
+    echo "  Verify: jq --version" >&2
+    exit 0
+  fi
+
+  # Read hook input from stdin
+  INPUT=$(cat)
+  CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+  [ -z "$CWD" ] && exit 0
+
+  # Compute auto-memory directory
+  SANITISED=$(echo "$CWD" | sed 's|/|-|g')
+  MEMORY_DIR="$HOME/.claude/projects/${SANITISED}/memory"
+
+  # Exit early if no progress.md (trivial session — no LLM calls needed)
+  [ ! -f "$MEMORY_DIR/progress.md" ] && exit 0
+
+  # Inform user (synchronous — visible before session exits)
+  PROGRESS_LINES=$(wc -l < "$MEMORY_DIR/progress.md" | tr -d ' ')
+  echo "[Tandem] Session captured (${PROGRESS_LINES} lines). Compacting memory and extracting learnings..."
+
+  # Spawn named worker process and exit
+  "$0" --worker "$CWD" &
   exit 0
 fi
 
-# Read hook input from stdin
-INPUT=$(cat)
-CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
-[ -z "$CWD" ] && exit 0
-
-# Compute auto-memory directory
-SANITISED=$(echo "$CWD" | sed 's|/|-|g')
-MEMORY_DIR="$HOME/.claude/projects/${SANITISED}/memory"
-
-# Exit early if no progress.md (trivial session — no LLM calls needed)
-[ ! -f "$MEMORY_DIR/progress.md" ] && exit 0
-
-PROFILE_DIR="${TANDEM_PROFILE_DIR:-$HOME/.tandem/profile}"
-STATE_DIR="$HOME/.tandem/state"
-RECURRENCE_FILE="$STATE_DIR/recurrence.json"
-TODAY=$(date +%Y-%m-%d)
+# ─── Shared: function definitions + worker execution ──────────────────────
 
 # ─── Phase 1: Recall — compact MEMORY.md ───────────────────────────────────
 
@@ -151,6 +188,21 @@ Produce the compacted MEMORY.md now."
 
   # Write compaction marker for SessionStart indicator
   date +%s > "$MEMORY_DIR/.tandem-last-compaction"
+
+  # Update stats: increment compactions
+  STATS_FILE="$HOME/.tandem/state/stats.json"
+  if [ -f "$STATS_FILE" ]; then
+    UPDATED_STATS=$(jq '.compactions += 1' "$STATS_FILE")
+    TMPSTATS=$(mktemp "$STATS_FILE.XXXXXX")
+    if [ -n "$TMPSTATS" ] && [ -f "$TMPSTATS" ]; then
+      echo "$UPDATED_STATS" > "$TMPSTATS"
+      if [ $? -eq 0 ] && [ -s "$TMPSTATS" ]; then
+        mv "$TMPSTATS" "$STATS_FILE"
+      else
+        rm -f "$TMPSTATS"
+      fi
+    fi
+  fi
 
   # Update recurrence.json with extracted themes
   if [ -n "$THEMES_LINE" ]; then
@@ -456,6 +508,31 @@ Review the session and extract learnings now."
     mkdir -p "$HOME/.tandem"
     echo "$NUDGE" > "$HOME/.tandem/next-nudge"
   fi
+
+  # Update stats: increment profile_updates and recalculate total lines
+  STATS_FILE="$HOME/.tandem/state/stats.json"
+  if [ -f "$STATS_FILE" ]; then
+    # Calculate total profile lines
+    TOTAL_LINES=0
+    if [ -d "$PROFILE_DIR" ]; then
+      for f in "$PROFILE_DIR"/*.md; do
+        [ -f "$f" ] || continue
+        FILE_LINES=$(wc -l < "$f" | tr -d ' ')
+        TOTAL_LINES=$((TOTAL_LINES + FILE_LINES))
+      done
+    fi
+
+    UPDATED_STATS=$(jq --arg lines "$TOTAL_LINES" '.profile_updates += 1 | .profile_total_lines = ($lines | tonumber)' "$STATS_FILE")
+    TMPSTATS=$(mktemp "$STATS_FILE.XXXXXX")
+    if [ -n "$TMPSTATS" ] && [ -f "$TMPSTATS" ]; then
+      echo "$UPDATED_STATS" > "$TMPSTATS"
+      if [ $? -eq 0 ] && [ -s "$TMPSTATS" ]; then
+        mv "$TMPSTATS" "$STATS_FILE"
+      else
+        rm -f "$TMPSTATS"
+      fi
+    fi
+  fi
 }
 
 # ─── Phase 3: Global activity — cross-project rolling log ─────────────────
@@ -501,9 +578,8 @@ ${SUMMARY}
   mv "$TMPFILE" "$GLOBAL_FILE"
 }
 
-# ─── Execute phases ─────────────────────────────────────────────────────────
+# ─── Worker execution (only reached in --worker mode) ──────────────────────
 
-# Track phase success to ensure we don't delete progress.md if critical phases fail
 RECALL_STATUS=0
 GROW_STATUS=0
 GLOBAL_STATUS=0
@@ -513,42 +589,32 @@ grow_extract && GROW_STATUS=1
 global_activity && GLOBAL_STATUS=1
 
 # Only delete progress.md if both critical phases succeeded
-# (global_activity is best-effort, not critical for data safety)
 if [ "$RECALL_STATUS" -eq 1 ] && [ "$GROW_STATUS" -eq 1 ]; then
   rm -f "$MEMORY_DIR/progress.md"
 else
-  # Mark partial failure for next session recovery
-  # This lets SessionStart detect and alert the user
   echo "" >> "$MEMORY_DIR/progress.md"
   echo "## Session End Partial Failure ($(date +%Y-%m-%d))" >> "$MEMORY_DIR/progress.md"
   echo "Recall completed: $RECALL_STATUS, Grow completed: $GROW_STATUS" >> "$MEMORY_DIR/progress.md"
 fi
 
-# ─── Status output ──────────────────────────────────────────────────────────
+# Write recap for next session
+RECAP_FILE="$HOME/.tandem/.last-session-recap"
+cat > "$RECAP_FILE" <<RECAP_EOF
+date: $TODAY
+recall_status: $RECALL_STATUS
+grow_status: $GROW_STATUS
+global_status: $GLOBAL_STATUS
+RECAP_EOF
 
-# Show what was accomplished (unless TANDEM_QUIET is set)
-if [ "${TANDEM_QUIET:-0}" != "1" ]; then
-  # Only output status if at least one phase completed
-  if [ "$RECALL_STATUS" -eq 1 ] || [ "$GROW_STATUS" -eq 1 ] || [ "$GLOBAL_STATUS" -eq 1 ]; then
-    echo "[Tandem] Session complete" >&2
+if [ "$RECALL_STATUS" -eq 1 ] && [ -f "$MEMORY_DIR/MEMORY.md" ]; then
+  LINE_COUNT=$(wc -l < "$MEMORY_DIR/MEMORY.md" | tr -d ' ')
+  echo "memory_lines: $LINE_COUNT" >> "$RECAP_FILE"
+fi
 
-    if [ "$RECALL_STATUS" -eq 1 ]; then
-      # Try to show line count reduction if possible
-      if [ -f "$MEMORY_DIR/MEMORY.md" ]; then
-        LINE_COUNT=$(wc -l < "$MEMORY_DIR/MEMORY.md" | tr -d ' ')
-        echo "  ✓ Recall: compacted MEMORY.md (${LINE_COUNT} lines)" >&2
-      else
-        echo "  ✓ Recall: compacted MEMORY.md" >&2
-      fi
-    fi
-
-    if [ "$GROW_STATUS" -eq 1 ]; then
-      echo "  ✓ Grow: updated profile" >&2
-    fi
-
-    if [ "$GLOBAL_STATUS" -eq 1 ]; then
-      echo "  ✓ Global: logged activity" >&2
-    fi
+if [ "$GROW_STATUS" -eq 1 ]; then
+  UPDATED=$(find "$PROFILE_DIR" -name "*.md" -mmin -5 2>/dev/null | xargs -I {} basename {} 2>/dev/null | tr '\n' ',' | sed 's/,$//')
+  if [ -n "$UPDATED" ]; then
+    echo "profile_files: $UPDATED" >> "$RECAP_FILE"
   fi
 fi
 

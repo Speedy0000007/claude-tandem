@@ -55,8 +55,49 @@ if [ ! -f "$MARKER_FILE" ]; then
   if [ "$PROVISIONED" -eq 1 ]; then
     mkdir -p "$(dirname "$MARKER_FILE")"
     date +%s > "$MARKER_FILE"
-    echo "[Tandem] First run — provisioned rules files and profile directory. Run /tandem:status to verify."
+
+    cat <<'EOF'
+
+╭─ Welcome to Tandem ──────────────────────────────────╮
+│                                                       │
+│ Your learning infrastructure is ready:               │
+│                                                       │
+│ ✓ Clarify — Better prompts, automatically            │
+│ ✓ Recall — Memory that compounds across sessions     │
+│ ✓ Grow — Technical profile built from your work      │
+│                                                       │
+│ Getting started:                                      │
+│ 1. Fill in ~/.tandem/profile/career-context.md       │
+│    (tells Tandem what you want to learn)             │
+│                                                       │
+│ 2. Just work normally — Tandem runs in background    │
+│                                                       │
+│ 3. After a few sessions, run /tandem:grow gaps       │
+│    to see personalized learning opportunities        │
+│                                                       │
+│ Run /tandem:status anytime to check what's happening │
+│                                                       │
+╰──────────────────────────────────────────────────────╯
+
+EOF
   fi
+fi
+
+# --- Initialize stats (outside first-run — runs whenever stats.json is missing) ---
+
+if [ ! -f "$HOME/.tandem/state/stats.json" ]; then
+  mkdir -p "$HOME/.tandem/state"
+  jq -n '{
+    total_sessions: 0,
+    first_session: (now | strftime("%Y-%m-%d")),
+    last_session: (now | strftime("%Y-%m-%d")),
+    compactions: 0,
+    profile_updates: 0,
+    streak_current: 0,
+    streak_best: 0,
+    milestones_hit: [],
+    profile_total_lines: 0
+  }' > "$HOME/.tandem/state/stats.json"
 fi
 
 # --- Version-based rules upgrade ---
@@ -183,7 +224,148 @@ if [ -f "$RECURRENCE_FILE" ]; then
     | join(", ")
   ' "$RECURRENCE_FILE" 2>/dev/null)
   if [ -n "$PROMOTIONS" ]; then
-    echo "Promotion ready: ${PROMOTIONS}. Consider adding rules to CLAUDE.md."
+    cat <<EOF
+
+╭─ Recurring Pattern Detected ─────────────────────────╮
+│ ${PROMOTIONS}
+│
+│ These patterns keep showing up across your sessions.
+│ Ready to make them permanent in CLAUDE.md?
+│
+│ This means:
+│ → Automatic reminders when relevant
+│ → Less repeated friction
+│ → Better muscle memory
+│
+│ Run: /tandem:recall promote <theme-slug>
+╰──────────────────────────────────────────────────────╯
+
+EOF
+  fi
+fi
+
+# --- Session stats tracking and milestones ---
+
+# Function to celebrate milestones
+celebrate_milestone() {
+  local MILESTONE=$1
+  local STATS=$2
+  local COMPACTIONS=$(echo "$STATS" | jq -r '.compactions')
+  local UPDATES=$(echo "$STATS" | jq -r '.profile_updates')
+  local PROFILE_LINES=$(echo "$STATS" | jq -r '.profile_total_lines')
+
+  cat <<EOF
+
+╭─────────────────────────────────────────────────────╮
+│ 🎉 ${MILESTONE} Sessions with Tandem!
+│
+│ Your profile has grown to ${PROFILE_LINES} lines.
+│ You've compacted ${COMPACTIONS} times and made ${UPDATES} profile updates.
+│
+│ That's real momentum. Keep going.
+╰─────────────────────────────────────────────────────╯
+
+EOF
+}
+
+# Increment session count and check for milestones
+STATS_FILE="$HOME/.tandem/state/stats.json"
+if [ -f "$STATS_FILE" ]; then
+  NEW_STATS=$(jq --arg today "$(date +%Y-%m-%d)" '
+    .total_sessions += 1 |
+    .last_session = $today |
+    if (.last_session == (.previous_session // "")) then
+      .streak_current += 1 |
+      .streak_best = ([.streak_best, .streak_current] | max)
+    else
+      .streak_current = 1
+    end |
+    .previous_session = $today
+  ' "$STATS_FILE")
+
+  # Atomic write
+  TMPFILE=$(mktemp "$STATS_FILE.XXXXXX")
+  if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
+    echo "$NEW_STATS" > "$TMPFILE"
+    if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
+      mv "$TMPFILE" "$STATS_FILE"
+    else
+      rm -f "$TMPFILE"
+    fi
+  fi
+
+  # Check for milestone celebrations
+  TOTAL=$(echo "$NEW_STATS" | jq -r '.total_sessions')
+  MILESTONES_HIT=$(echo "$NEW_STATS" | jq -r '.milestones_hit | join(",")')
+
+  for MILESTONE in 10 50 100 500 1000; do
+    if [ "$TOTAL" -eq "$MILESTONE" ] && ! echo "$MILESTONES_HIT" | grep -q "$MILESTONE"; then
+      celebrate_milestone "$MILESTONE" "$NEW_STATS"
+      # Mark milestone as hit
+      jq ".milestones_hit += [\"$MILESTONE\"]" "$STATS_FILE" > "$STATS_FILE.tmp"
+      mv "$STATS_FILE.tmp" "$STATS_FILE"
+    fi
+  done
+
+  # Check for learning streak
+  STREAK=$(echo "$NEW_STATS" | jq -r '.streak_current')
+  if [ "$STREAK" -ge 5 ] && [ $(($STREAK % 5)) -eq 0 ]; then
+    cat <<EOF
+
+🔥 ${STREAK}-session learning streak!
+
+Your profile has been updated in ${STREAK} consecutive sessions.
+That's how expertise compounds.
+
+EOF
+  fi
+fi
+
+# --- Last session recap ---
+
+# Show last session recap if available
+RECAP_FILE="$HOME/.tandem/.last-session-recap"
+if [ -f "$RECAP_FILE" ]; then
+  RECAP_DATE=$(grep '^date:' "$RECAP_FILE" | cut -d' ' -f2)
+  RECALL=$(grep '^recall_status: 1' "$RECAP_FILE" &>/dev/null && echo 1 || echo 0)
+  GROW=$(grep '^grow_status: 1' "$RECAP_FILE" &>/dev/null && echo 1 || echo 0)
+
+  if [ "$RECALL" -eq 1 ] || [ "$GROW" -eq 1 ]; then
+    echo ""
+    echo "Last session ($RECAP_DATE):"
+
+    if [ "$RECALL" -eq 1 ]; then
+      LINES=$(grep '^memory_lines:' "$RECAP_FILE" | cut -d' ' -f2)
+      echo "  ✓ Recalled (MEMORY.md: ${LINES} lines)"
+    fi
+
+    if [ "$GROW" -eq 1 ]; then
+      FILES=$(grep '^profile_files:' "$RECAP_FILE" | cut -d' ' -f2-)
+      if [ -n "$FILES" ]; then
+        echo "  ✓ Grown (updated: $FILES)"
+      else
+        echo "  ✓ Grown (profile updated)"
+      fi
+    fi
+    echo ""
+  fi
+
+  # Clean up recap file
+  rm -f "$RECAP_FILE"
+fi
+
+# Check for recent SessionEnd errors
+ERROR_LOG="$HOME/.tandem/logs/session-end-errors.log"
+if [ -f "$ERROR_LOG" ]; then
+  # Check if errors written in last 24h
+  RECENT_ERRORS=$(find "$ERROR_LOG" -mtime -1 2>/dev/null)
+  if [ -n "$RECENT_ERRORS" ]; then
+    ERROR_COUNT=$(tail -100 "$ERROR_LOG" | grep -c '\[Tandem.*Error\]' || echo 0)
+    if [ "$ERROR_COUNT" -gt 0 ]; then
+      echo "⚠️  SessionEnd errors detected (${ERROR_COUNT} in last 24h)"
+      echo "   Check: $ERROR_LOG"
+      echo ""
+    fi
   fi
 fi
 
@@ -191,7 +373,14 @@ fi
 
 # Recalled. — previous session was compacted
 if [ -f "$MEMORY_DIR/.tandem-last-compaction" ]; then
-  echo "Recalled."
+  # Check if stats available for enhanced indicator
+  if [ -f "$HOME/.tandem/state/stats.json" ]; then
+    TOTAL_COMPACTIONS=$(jq -r '.compactions' "$HOME/.tandem/state/stats.json")
+    PROFILE_LINES=$(jq -r '.profile_total_lines' "$HOME/.tandem/state/stats.json")
+    echo "Recalled. (${TOTAL_COMPACTIONS} compactions total, profile: ${PROFILE_LINES} lines)"
+  else
+    echo "Recalled."
+  fi
   rm -f "$MEMORY_DIR/.tandem-last-compaction"
 fi
 
@@ -201,7 +390,7 @@ if [ -f "$NUDGE_FILE" ]; then
   NUDGE_CONTENT=$(cat "$NUDGE_FILE")
   if [ -n "$NUDGE_CONTENT" ]; then
     echo "Grown."
-    echo "$NUDGE_CONTENT"
+    echo "${NUDGE_CONTENT}"
   fi
   rm -f "$NUDGE_FILE"
 fi
@@ -235,8 +424,17 @@ if [ -f "$GLOBAL_FILE" ]; then
   ')
 
   if [ -n "$OTHER_ENTRIES" ]; then
-    echo "Recent work in other projects:"
-    echo "$OTHER_ENTRIES"
+    echo ""
+    echo "Context from other projects:"
+    echo ""
+
+    # Add visual indicators
+    echo "$OTHER_ENTRIES" | while IFS= read -r entry; do
+      echo "🔹 $entry"
+    done
+
+    echo ""
+    echo "(Full global memory: /tandem:status --global)"
   fi
 fi
 
@@ -251,7 +449,7 @@ if [ -f "$MEMORY_DIR/progress.md" ]; then
   if [ -n "$PROGRESS_MTIME" ]; then
     AGE=$((SESSION_START - PROGRESS_MTIME))
     if [ "$AGE" -gt 300 ]; then
-      echo "[Tandem] Stale progress.md detected from a previous session (SessionEnd hook may not have fired). Contents preserved — review and incorporate relevant context."
+      echo "[Tandem] Stale progress.md detected from a previous session (background work may still be running, or SessionEnd hook didn't complete). Contents preserved — review and incorporate relevant context."
     fi
   fi
 fi

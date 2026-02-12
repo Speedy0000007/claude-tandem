@@ -14,7 +14,7 @@ Claude Code already has auto-memory, MEMORY.md, context compaction, and a hook s
 - **`${CLAUDE_PLUGIN_ROOT}`** — all paths in `hooks/hooks.json` use this env var. Scripts that need plugin-relative paths (e.g., `session-start.sh` for provisioning) resolve it via `CLAUDE_PLUGIN_ROOT` with a fallback to `$(dirname "$(dirname "$0")")`.
 - **Auto-memory directory** — computed from CWD: `~/.claude/projects/$(echo "$CWD" | sed 's|/|-|g')/memory/`. This matches Claude Code's native convention. Every script that touches progress.md or MEMORY.md uses this pattern.
 - **Zero repo files** — Tandem never creates files inside user repositories. All data goes to `~/.claude/` (rules, memory) or `~/.tandem/` (profile).
-- **SessionEnd hooks** — only `type: "command"` is supported. LLM calls use `claude -p --model haiku --max-budget-usd 0.05`.
+- **SessionEnd hooks** — sync hook with fast exit. Prints informational message (visible to user), then backgrounds LLM calls (`claude -p --model haiku --max-budget-usd 0.05`) in a subshell and exits immediately.
 - **PreCompact hook** — captures current state snapshot + progress safety net before compaction. Uses `--max-budget-usd 0.03`. Always fires (state snapshot), but only extracts progress when progress.md is stale (>2 min).
 - **TaskCompleted hook** — async, no LLM call. Just checks progress.md staleness (>5 min) and outputs a `systemMessage` nudge if stale.
 - **Rules files** — provisioned to `~/.claude/rules/tandem-*.md` by `session-start.sh`. Install = copy, uninstall = delete. Never patch user's CLAUDE.md.
@@ -24,7 +24,7 @@ Claude Code already has auto-memory, MEMORY.md, context compaction, and a hook s
 
 - Hook definitions live in `hooks/hooks.json`, not in individual scripts
 - SessionStart fires on `startup|resume|compact` — fully idempotent, handles post-compaction state recovery
-- SessionEnd runs a single `session-end.sh` that executes compaction first (critical), then extraction (best effort), then cleans up progress.md
+- SessionEnd runs a single `session-end.sh`: prints summary to user (sync), then backgrounds compaction (critical) + extraction (best effort) + cleanup in a subshell
 - PreCompact writes ephemeral `## Pre-compaction State` to progress.md — consumed by SessionStart, never reaches SessionEnd
 - TaskCompleted is async (`"async": true`) — no blocking, nudge delivered on next turn
 - Scripts exit 0 on all paths — hook failures should be silent to the user
