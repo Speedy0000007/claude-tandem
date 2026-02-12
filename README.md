@@ -1,15 +1,15 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Tandem logo" width="320">
+  <img src="assets/logo.png" alt="Tandem — memory management plugin for Claude Code" width="320">
 </p>
 
 <h1 align="center">Tandem</h1>
 
 <p align="center">
-  <strong>Compound learning for Claude Code — every session makes the next one better.</strong>
+  <strong>Persistent memory for Claude Code. Every session picks up where the last one left off.</strong>
 </p>
 
 <p align="center">
-  <sub>Claude gets sharper. You get smarter.</sub>
+  <sub>Session handover, memory compaction, cross-project context, and durable commit history. Pure bash, zero dependencies.</sub>
 </p>
 
 ```bash
@@ -26,9 +26,17 @@ claude "Let's work in Tandem"
 
 ---
 
+## The problem
+
+Claude Code has no persistent memory between sessions. MEMORY.md gets truncated at 200 lines. Context compaction erases your working state mid-session. There's no way to hand off context from one session to the next, no handover.md, no progress file that survives compaction. And there's zero cross-project awareness: sessions in one repo have no idea what you were doing in another.
+
+These are the same memory problems that affect every AI coding agent. Tandem solves them for Claude Code using nothing but Claude Code's native hook system.
+
+---
+
 ## What it does
 
-Tandem is a Claude Code plugin with four features:
+Tandem is a memory management plugin for Claude Code. Four features, each targeting a different gap in how coding agents handle context and recall:
 
 <table>
   <tr>
@@ -82,9 +90,9 @@ To start a session without Tandem features, use `claude "Skip Tandem"` instead.
 
 ---
 
-## Philosophy: enhance, never replace
+## Philosophy: enhance Claude Code's native memory, never replace it
 
-Claude Code already has auto-memory, MEMORY.md, context compaction, and a hook system. Tandem doesn't build parallel infrastructure — it makes the native systems work better.
+Claude Code already has auto-memory, MEMORY.md, context compaction, and a hook system. Tandem doesn't build parallel infrastructure. It makes the native memory systems work better.
 
 - **Auto-memory writes MEMORY.md.** Tandem compacts it to stay under the 200-line loading limit.
 - **Claude Code has no cross-project awareness.** Tandem adds a lightweight rolling log so sessions in one repo know what you've been doing elsewhere.
@@ -98,7 +106,7 @@ If Claude Code ships a native version of something Tandem does, Tandem should ge
 
 ## Features
 
-### Clarify
+### Clarify — input quality for better agent output
 
 Garbage in, garbage out. Clarify fixes the input.
 
@@ -110,11 +118,11 @@ A UserPromptSubmit hook detects long, unstructured input (dictation, brain dumps
 - `TANDEM_CLARIFY_MIN_LENGTH` — minimum characters before assessment triggers (default: 200)
 - `TANDEM_CLARIFY_QUIET=1` — suppress branding in Clarify output (default: off)
 
-### Recall
+### Recall — persistent memory across sessions
 
 Claude already remembers. Recall makes it *good* at remembering.
 
-- **Session bridge** — maintains `progress.md` alongside MEMORY.md, surviving context compaction within a session
+- **Session bridge via progress.md** — maintains a running `progress.md` alongside MEMORY.md, acting as a session handover file that survives context compaction
 - **Pre-compaction safety net** — a PreCompact hook captures the precise "where are we right now" before compaction compresses in-memory context. After compaction, SessionStart surfaces this snapshot so Claude picks up exactly where it left off
 - **Memory compaction** — at session end, rewrites MEMORY.md to stay under 200 lines (the native loading limit). Keeps what's relevant, lets stale details decay
 - **Cross-project context** — at session end, logs a summary of what happened to a global rolling log (`~/.tandem/memory/global.md`, 30 entries max). At session start, Claude sees recent activity from other projects for cross-repo awareness
@@ -123,7 +131,7 @@ Claude already remembers. Recall makes it *good* at remembering.
 
 **What you see:** `Recalled.` at session start means the previous session's memory was compacted. `Recent work in other projects:` shows what you've been doing elsewhere. After compaction, `Resuming. Before compaction you were: ...` restores your exact position. If a session ends abnormally, stale progress is detected and recovered next time.
 
-### Commit
+### Commit — durable memory in git history
 
 Git is the only permanent record. Progress.md gets compacted. MEMORY.md gets rewritten. Commit messages persist forever.
 
@@ -142,7 +150,7 @@ The result: `git log` becomes a complete, queryable history of every AI session.
 - `TANDEM_AUTO_COMMIT=0` — disable auto-commits at session end (default: enabled)
 - `TANDEM_AUTO_SQUASH=0` — disable auto-squash on commit (default: enabled). The push guard stays active regardless.
 
-### Grow
+### Grow — learn alongside your coding agent
 
 The user gets smarter. Learns as they go.
 
@@ -170,11 +178,9 @@ Reports which features are installed, hook health, memory stats, and profile sta
 
 ---
 
-## How it works
+## How it works — Claude Code hooks, no background agents
 
-### No background processes
-
-Tandem uses Claude Code's native hook system. Zero background services, zero databases, zero file pollution in your repos.
+Tandem uses Claude Code's native hook system. Every feature is a lifecycle hook that runs, does its work, and exits. Zero background services, zero databases, zero file pollution in your repos.
 
 | Event | Script | Purpose |
 |-------|--------|---------|
