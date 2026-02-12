@@ -1,4 +1,4 @@
-<!-- tandem v1.2.1 -->
+<!-- tandem v1.3.0 -->
 # Tandem Debugging
 
 When Tandem appears to be in a broken or confused state, check the logs before guessing.

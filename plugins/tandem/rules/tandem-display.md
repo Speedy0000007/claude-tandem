@@ -1,4 +1,4 @@
-<!-- tandem v1.2.1 -->
+<!-- tandem v1.3.0 -->
 # Tandem Display
 
 ## Session triggers

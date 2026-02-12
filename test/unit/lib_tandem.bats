@@ -28,7 +28,9 @@ _source_lib() {
 
   # Format: YYYY-MM-DD HH:MM:SS [INFO ] [version] [test] hello world
   [[ "$line" == *"[INFO ]"* ]]
-  [[ "$line" == *"[1.2.1]"* ]]
+  local plugin_ver
+  plugin_ver=$(jq -r '.version' "$PLUGIN_ROOT/.claude-plugin/plugin.json")
+  [[ "$line" == *"[${plugin_ver}]"* ]]
   [[ "$line" == *"[test]"* ]]
   [[ "$line" == *"hello world"* ]]
 }
@@ -84,7 +86,9 @@ _source_lib() {
 
   run tandem_header
 
-  assert_output "◎╵═╵◎ ~ Tandem v1.2.1 · ▷ 42 · ↻ 7 · ◆ 3"
+  local plugin_ver
+  plugin_ver=$(jq -r '.version' "$PLUGIN_ROOT/.claude-plugin/plugin.json")
+  assert_output "◎╵═╵◎ ~ Tandem v${plugin_ver} · ▷ 42 · ↻ 7 · ◆ 3"
 }
 
 @test "tandem_header handles missing stats.json with defaults" {
@@ -93,7 +97,9 @@ _source_lib() {
 
   run tandem_header
 
-  assert_output "◎╵═╵◎ ~ Tandem v1.2.1 · ▷ 0 · ↻ 0 · ◆ 0"
+  local plugin_ver
+  plugin_ver=$(jq -r '.version' "$PLUGIN_ROOT/.claude-plugin/plugin.json")
+  assert_output "◎╵═╵◎ ~ Tandem v${plugin_ver} · ▷ 0 · ↻ 0 · ◆ 0"
 }
 
 # ─── Dependencies ────────────────────────────────────────────────────────────

@@ -23,7 +23,7 @@ Claude Code already has auto-memory, MEMORY.md, context compaction, and a hook s
 - **SessionEnd hooks** — sync hook with fast exit. Prints informational message (visible to user), then spawns a detached worker (`nohup ... </dev/null &>/dev/null & disown`) for Phase 0 (checkpoint commit) + LLM calls via `tandem_llm_call`. PID lockfile (`~/.tandem/state/.worker.lock`) prevents overlapping workers.
 - **Swappable LLM backend** — all background LLM calls go through `tandem_llm_call()` in `lib/tandem.sh`. Default: `claude -p` with haiku. Set `TANDEM_LLM_BACKEND` to an OpenAI-compatible URL (e.g. Ollama, LM Studio) for zero-cost local inference. Config lives in `~/.tandem/.env`. The function handles claude CLI specifics (budget, system-prompt stripping) and curl-based OpenAI API calls transparently.
 - **`claude -p` budget floor** — `claude -p` has a base cost of ~$0.06 even with empty system prompt. `tandem_llm_call` defaults to `--max-budget-usd 0.15`. Budget exceeded returns exit 0 with "Error: Exceeded USD budget" on stdout, handled internally by `tandem_llm_call`.
-- **PreCompact hook** — captures current state snapshot + progress safety net before compaction. Uses `--max-budget-usd 0.15` with `TANDEM_WORKER=1` inline. Always fires (state snapshot), but only extracts progress when progress.md is stale (>2 min).
+- **PreCompact hook** — captures current state snapshot + progress safety net before compaction. Uses `--max-budget-usd 0.15` with `TANDEM_WORKER=1` inline. Skips the LLM call entirely when structured Working State markers (`<!-- working-state:start/end -->`) exist in progress.md and progress is fresh. Falls back to LLM extraction when markers are absent or progress is stale (>2 min).
 - **TaskCompleted hook** — async, no LLM call. Just checks progress.md staleness (>5 min) and outputs a `systemMessage` nudge if stale.
 - **`TANDEM_AUTO_COMMIT`** — env var controlling session-end auto-commits. Default: enabled (1). Set to `0` to disable checkpoint commits. Only commits when there are actual staged changes (no empty commits).
 - **`TANDEM_AUTO_SQUASH`** — env var controlling auto-commit squash on commit. Default: enabled (1). Set to `0` to disable squash-on-commit. The push guard is always active regardless of this setting: pushes are always denied if auto-commits are in the push range.
@@ -36,7 +36,9 @@ Claude Code already has auto-memory, MEMORY.md, context compaction, and a hook s
 - Hook definitions live in `hooks/hooks.json`, not in individual scripts
 - SessionStart fires on `startup|resume|compact` — fully idempotent, handles post-compaction state recovery
 - SessionEnd runs a single `session-end.sh`: prints summary to user (sync), then backgrounds checkpoint commit (phase 0) + compaction (phase 1) + extraction (phase 2) + global log (phase 3) in a subshell
-- PreCompact writes ephemeral `## Pre-compaction State` to progress.md — consumed by SessionStart, never reaches SessionEnd
+- PreCompact writes ephemeral `## Pre-compaction State` to progress.md — consumed by SessionStart, never reaches SessionEnd. Prefers structured Working State markers when available (deterministic, no LLM).
+- Memory compaction uses three priority tiers: [P1] permanent (architecture, preferences), [P2] active (current state, recent decisions), [P3] ephemeral (debugging, routine). Temporal annotations (observed: YYYY-MM-DD) enable evidence-based pruning.
+- progress.md has two parts: a rewritable Working State section (between `<!-- working-state:start/end -->` markers) and an append-only Session Log below. Working State captures current task, approach, blockers, key files.
 - TaskCompleted is async (`"async": true`) — no blocking, nudge delivered on next turn
 - Scripts exit 0 on all paths — hook failures should be silent to the user
 - Scripts exit early when preconditions aren't met (no progress.md = no LLM call)
@@ -52,7 +54,7 @@ plugins/tandem/
   hooks/              Hook wiring (hooks.json)
   lib/                Shared library (tandem.sh)
   scripts/            All executable hook scripts
-  skills/             SKILL.md files (clarify, grow, logs, reload, status)
+  skills/             SKILL.md files (clarify, grow, logs, recall-promote, reload, status)
   rules/              Source rules files (provisioned to ~/.claude/rules/)
   templates/          Profile bootstrap templates
 
@@ -74,7 +76,7 @@ make test-integration  # integration tests only
 make lint              # shellcheck
 ```
 
-- 204 tests: 187 unit + 17 integration across 13 test files
+- 225 tests: 208 unit + 17 integration across 14 test files
 - HOME isolation: every test runs in a temp HOME, no real `~/.tandem/` or `~/.claude/` touched
 - LLM mocking: mock `claude` CLI and `curl` on PATH, canned responses in `test/fixtures/`
 - Git mocking: real git repos in temp dirs for commit/squash/push tests

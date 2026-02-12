@@ -1,4 +1,4 @@
-<!-- tandem v1.2.1 -->
+<!-- tandem v1.3.0 -->
 # Tandem Commit
 
 Git is the only permanent record. Progress.md gets compacted. MEMORY.md gets rewritten. Commit messages persist forever.

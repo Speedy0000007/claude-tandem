@@ -94,10 +94,12 @@ recall_compact() {
     MEMORY_CONTENT=$(cat "$MEMORY_DIR/MEMORY.md")
   fi
 
-  # Read existing recurrence themes for slug reuse
+  # Read existing recurrence themes for slug reuse and promotion
   EXISTING_THEMES=""
+  RECURRENCE_THEMES_WITH_COUNTS=""
   if [ -f "$RECURRENCE_FILE" ]; then
     EXISTING_THEMES=$(jq -r '.themes | keys[]' "$RECURRENCE_FILE" 2>/dev/null | tr '\n' ', ' | sed 's/,$//')
+    RECURRENCE_THEMES_WITH_COUNTS=$(jq -r '.themes | to_entries[] | select(.value.count >= 3) | "\(.key): count=\(.value.count), first=\(.value.first_seen), last=\(.value.last_seen)"' "$RECURRENCE_FILE" 2>/dev/null)
   fi
 
   # Build the compaction prompt
@@ -108,7 +110,29 @@ You will receive two inputs:
 1. The current MEMORY.md (may be empty)
 2. The session progress notes
 
-Instructions:
+## Priority-based retention
+
+Classify every piece of information:
+- [P1] PERMANENT: Architecture decisions, user preferences, workflow conventions, recurring patterns. Survive indefinitely.
+- [P2] ACTIVE: Current project state, recent decisions, in-progress context. Survive 3-5 compactions, then decay.
+- [P3] EPHEMERAL: Debugging details, completed task specifics, routine operations. Prune first.
+
+Compaction rules:
+- Keep ALL [P1] entries (may rephrase for brevity, never remove)
+- Keep [P2] entries from recent sessions. Promote to [P1] if still relevant after 3+ compactions, otherwise prune.
+- Prune [P3] entries unless from the current session
+- New progress.md information starts as [P2] unless clearly architectural ([P1]) or ephemeral ([P3])
+- Prefix every entry with its priority marker
+
+## Temporal context
+
+- Include (observed: YYYY-MM-DD) on each entry or group of entries
+- Carry forward existing dates from prior compactions unchanged
+- New entries from this session get today's date: $(date +%Y-%m-%d)
+- The date is when the fact was first recorded, not when the event occurred
+
+## General instructions
+
 - Start from the existing MEMORY.md content as your base
 - Merge in key facts, decisions, patterns, and context from progress.md
 - Prune stale or redundant entries — anything no longer relevant to active work
@@ -117,14 +141,28 @@ Instructions:
 - Do NOT reference or modify other files in the memory/ directory
 - Output ONLY the new MEMORY.md content — no explanation, no code fences, no preamble
 - Always include a \`## Last Session\` section at the very end (before the THEMES line). This section is replaced every compaction, never accumulated. It should contain: what was being worked on, where it left off, what comes next. Write it so the next session can continue immediately. 2-5 lines max.
+- If progress.md contains a \`<!-- working-state:start/end -->\` section, treat its contents as the most authoritative description of the session's final state. Use it to populate the \`## Last Session\` section.
 - Maintain a \`## Active Plans\` section listing file paths to plan documents referenced in the progress notes. Carry forward plans from the existing MEMORY.md. Remove a plan only when the progress notes indicate it was implemented or abandoned. If no plans exist, omit the section entirely.
 - Also identify 1-3 recurring themes from this session as lowercase-hyphenated slugs. If a slug matches an existing theme, reuse it. Output the themes on their own line at the very end: \`THEMES: slug-1, slug-2\`
 
 PROMPT_EOF
   )
 
-  PROMPT="${PROMPT}
+  # Add recurrence-aware promotion if themes exist
+  RECURRENCE_SECTION=""
+  if [ -n "$RECURRENCE_THEMES_WITH_COUNTS" ]; then
+    RECURRENCE_SECTION="
+## Recurrence-aware compaction
+These themes have recurred across multiple sessions. If they appear in progress notes but are NOT adequately represented in MEMORY.md, promote them to [P1]:
 
+<recurrence_themes>
+${RECURRENCE_THEMES_WITH_COUNTS}
+</recurrence_themes>
+"
+  fi
+
+  PROMPT="${PROMPT}
+${RECURRENCE_SECTION}
 <existing_theme_slugs>
 ${EXISTING_THEMES}
 </existing_theme_slugs>
@@ -282,6 +320,18 @@ Produce the compacted MEMORY.md now."
         rm -f "$TMPFILE"
       fi
     fi
+  fi
+
+  # Post-compaction verification: warn if high-recurrence themes aren't in MEMORY.md
+  if [ -f "$RECURRENCE_FILE" ] && [ -f "$MEMORY_DIR/MEMORY.md" ]; then
+    HIGH_THEMES=$(jq -r '[.themes | to_entries[] | select(.value.count >= 5) | .key] | .[]' \
+      "$RECURRENCE_FILE" 2>/dev/null)
+    for theme in $HIGH_THEMES; do
+      THEME_WORDS="${theme//-/ }"
+      if ! grep -qi "$THEME_WORDS" "$MEMORY_DIR/MEMORY.md" 2>/dev/null; then
+        tandem_log warn "high-recurrence theme '$theme' (5+ sessions) missing from MEMORY.md"
+      fi
+    done
   fi
 }
 

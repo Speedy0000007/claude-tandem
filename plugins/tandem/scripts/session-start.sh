@@ -146,7 +146,7 @@ CLAUDE_MD="$HOME/.claude/CLAUDE.md"
 TANDEM_VERSION="v${PLUGIN_VERSION:-1.2.0}"
 TANDEM_SECTION="<!-- tandem:start ${TANDEM_VERSION} -->
 ## Tandem — Session Progress
-After completing significant work steps (features, fixes, decisions), append a brief note to progress.md in your auto-memory directory. Include: what was done, key decisions, outcome. One or two lines per step. Create progress.md on your first significant action if it doesn't exist. This enables memory continuity between sessions.
+Maintain progress.md in your auto-memory directory with two parts: a rewritable Working State section (between \`<!-- working-state:start/end -->\` markers) capturing current task, approach, blockers, and key files, plus an append-only Session Log below. Create progress.md with the Working State template on your first significant action if it doesn't exist. This enables memory continuity between sessions.
 <!-- tandem:end -->"
 
 if [ ! -f "$CLAUDE_MD" ]; then
@@ -202,9 +202,19 @@ fi
 # --- Post-compaction state recovery (outputs directly, before Tandem block) ---
 
 if [ -f "$MEMORY_DIR/progress.md" ] && grep -q '## Pre-compaction State' "$MEMORY_DIR/progress.md"; then
-  STATE_CONTENT=$(sed -n '/^## Pre-compaction State$/,/^## /{ /^## Pre-compaction State$/d; /^## /d; p; }' "$MEMORY_DIR/progress.md")
+  # Prefer structured Working State over free-form Pre-compaction State
+  STATE_CONTENT=""
+  if grep -q '<!-- working-state:start -->' "$MEMORY_DIR/progress.md" 2>/dev/null; then
+    STATE_CONTENT=$(sed -n '/<!-- working-state:start -->/,/<!-- working-state:end -->/p' \
+      "$MEMORY_DIR/progress.md" | grep -v '<!-- working-state')
+  fi
+
+  # Fall back to Pre-compaction State if no structured state
   if [ -z "$STATE_CONTENT" ]; then
-    STATE_CONTENT=$(sed -n '/^## Pre-compaction State$/,$p' "$MEMORY_DIR/progress.md" | tail -n +2)
+    STATE_CONTENT=$(sed -n '/^## Pre-compaction State$/,/^## /{ /^## Pre-compaction State$/d; /^## /d; p; }' "$MEMORY_DIR/progress.md")
+    if [ -z "$STATE_CONTENT" ]; then
+      STATE_CONTENT=$(sed -n '/^## Pre-compaction State$/,$p' "$MEMORY_DIR/progress.md" | tail -n +2)
+    fi
   fi
 
   if [ -n "$STATE_CONTENT" ]; then
@@ -214,7 +224,7 @@ if [ -f "$MEMORY_DIR/progress.md" ] && grep -q '## Pre-compaction State' "$MEMOR
 
   TMPFILE=$(mktemp)
   if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
-    sed '/^## Pre-compaction State$/,$d' "$MEMORY_DIR/progress.md" > "$TMPFILE"
+    sed '/^## Auto-captured (pre-compaction)$/,$d; /^## Pre-compaction State$/,$d' "$MEMORY_DIR/progress.md" > "$TMPFILE"
     if [ $? -eq 0 ]; then
       sed -i.bak -e :a -e '/^\n*$/{$d;N;ba;}' "$TMPFILE" 2>/dev/null || sed -e :a -e '/^\n*$/{$d;N;ba;}' "$TMPFILE" > "${TMPFILE}.clean" && mv "${TMPFILE}.clean" "$TMPFILE"
       rm -f "${TMPFILE}.bak"
@@ -225,6 +235,14 @@ if [ -f "$MEMORY_DIR/progress.md" ] && grep -q '## Pre-compaction State' "$MEMOR
     fi
   else
     tandem_log warn "failed to create temp file for progress.md state cleanup"
+  fi
+elif [ -f "$MEMORY_DIR/progress.md" ] && grep -q '<!-- working-state:start -->' "$MEMORY_DIR/progress.md" 2>/dev/null; then
+  # Previous session ended without compaction — Working State markers still present
+  STATE_CONTENT=$(sed -n '/<!-- working-state:start -->/,/<!-- working-state:end -->/p' \
+    "$MEMORY_DIR/progress.md" | grep -v '<!-- working-state')
+  if [ -n "$STATE_CONTENT" ]; then
+    echo "Continuing from previous session:"
+    echo "$STATE_CONTENT"
   fi
 fi
 

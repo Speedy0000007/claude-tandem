@@ -41,6 +41,35 @@ else
   fi
 fi
 
+# Check for structured Working State markers (deterministic state capture)
+WORKING_STATE=""
+if [ -f "$MEMORY_DIR/progress.md" ]; then
+  WORKING_STATE=$(sed -n '/<!-- working-state:start -->/,/<!-- working-state:end -->/p' \
+    "$MEMORY_DIR/progress.md" 2>/dev/null | grep -v '<!-- working-state')
+fi
+
+# If structured state exists and progress is fresh, skip LLM entirely
+if [ -n "$WORKING_STATE" ] && [ "$INCLUDE_PROGRESS" = false ]; then
+  # Structured state found + progress is fresh — write state directly, no LLM needed
+  mkdir -p "$MEMORY_DIR"
+  TMPFILE=$(mktemp)
+  if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
+    tandem_log error "failed to create temp file for progress.md"
+    exit 0
+  fi
+
+  if [ -f "$MEMORY_DIR/progress.md" ]; then
+    cat "$MEMORY_DIR/progress.md" > "$TMPFILE"
+  fi
+
+  printf '\n## Pre-compaction State\n' >> "$TMPFILE"
+  echo "$WORKING_STATE" >> "$TMPFILE"
+
+  mv "$TMPFILE" "$MEMORY_DIR/progress.md"
+  tandem_log info "captured structured working state before compaction (no LLM)"
+  exit 0
+fi
+
 # Build haiku prompt
 PROGRESS_INSTRUCTION=""
 if [ "$INCLUDE_PROGRESS" = true ]; then

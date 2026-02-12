@@ -1,4 +1,4 @@
-<!-- tandem v1.2.1 -->
+<!-- tandem v1.3.0 -->
 # Tandem Grow
 
 When non-trivial technical concepts are used during a session, mention them naturally in your response -- what the concept is, why this approach over alternatives, and a code reference. Don't format these as structured blocks; weave them into your explanation.

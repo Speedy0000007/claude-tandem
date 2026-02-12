@@ -9,3 +9,6 @@ examples/
 
 # Internal plans and notes
 .claude/plans/
+
+# Claude Code plugin artifacts
+.orphaned_at
