@@ -83,3 +83,86 @@ tandem_require_claude() {
     return 1
   fi
 }
+
+# ─── .env loading ────────────────────────────────────────────────────────────
+
+[ -f "$HOME/.tandem/.env" ] && source "$HOME/.tandem/.env"
+
+# ─── LLM backend abstraction ────────────────────────────────────────────────
+
+tandem_require_llm() {
+  local backend="${TANDEM_LLM_BACKEND:-claude}"
+  if [ "$backend" = "claude" ]; then
+    tandem_require_claude
+  else
+    if ! command -v curl &>/dev/null; then
+      tandem_log error "curl not found — required for URL-based LLM backend"
+      return 1
+    fi
+    if ! command -v jq &>/dev/null; then
+      tandem_log error "jq not found — required for URL-based LLM backend"
+      return 1
+    fi
+    if [ -z "${TANDEM_LLM_MODEL:-}" ]; then
+      tandem_log error "TANDEM_LLM_MODEL is required when using a URL backend (e.g. llama3.2, mistral)"
+      return 1
+    fi
+  fi
+}
+
+tandem_llm_call() {
+  local prompt="$1"
+  local budget="${2:-0.15}"
+  local backend="${TANDEM_LLM_BACKEND:-claude}"
+  local model="${TANDEM_LLM_MODEL:-haiku}"
+
+  if [ "$backend" = "claude" ]; then
+    local result
+    result=$(echo "$prompt" | claude -p --model "$model" --max-budget-usd "$budget" --system-prompt "" --tools "" 2>/dev/null)
+    local rc=$?
+
+    if [ $rc -ne 0 ] || [ -z "$result" ]; then
+      tandem_log error "LLM call failed: empty response (claude backend)"
+      return 1
+    fi
+    if [[ "$result" == Error:* ]]; then
+      tandem_log error "LLM call failed: ${result}"
+      return 1
+    fi
+
+    printf '%s' "$result"
+  else
+    local url="${backend}/v1/chat/completions"
+    local payload
+    payload=$(jq -n \
+      --arg model "$model" \
+      --arg content "$prompt" \
+      '{model: $model, messages: [{role: "user", content: $content}], max_tokens: 4096}')
+
+    local curl_args=(-s -S --max-time 120 -H "Content-Type: application/json")
+    if [ -n "${TANDEM_LLM_API_KEY:-}" ]; then
+      curl_args+=(-H "Authorization: Bearer ${TANDEM_LLM_API_KEY}")
+    fi
+
+    local response
+    response=$(curl "${curl_args[@]}" -d "$payload" "$url" 2>/dev/null)
+    local rc=$?
+
+    if [ $rc -ne 0 ] || [ -z "$response" ]; then
+      tandem_log error "LLM call failed: curl error (rc=$rc) for $url"
+      return 1
+    fi
+
+    local result
+    result=$(echo "$response" | jq -r '.choices[0].message.content // empty' 2>/dev/null)
+
+    if [ -z "$result" ]; then
+      local err_msg
+      err_msg=$(echo "$response" | jq -r '.error.message // empty' 2>/dev/null)
+      tandem_log error "LLM call failed: ${err_msg:-no content in response} ($url)"
+      return 1
+    fi
+
+    printf '%s' "$result"
+  fi
+}

@@ -65,13 +65,13 @@ Focus on WHAT and WHY, not HOW. Be specific — names, file paths, step numbers.
 ${TRANSCRIPT_TAIL}
 </transcript>"
 
-# Call haiku
-tandem_require_claude || exit 0
+# Call LLM
+tandem_require_llm || exit 0
 
-RESULT=$(TANDEM_WORKER=1 claude -p --model haiku --max-budget-usd 0.15 --system-prompt "" --tools "" 2>/dev/null <<< "$PROMPT")
+RESULT=$(TANDEM_WORKER=1 tandem_llm_call "$PROMPT")
 
-if [ $? -ne 0 ] || [ -z "$RESULT" ] || [[ "$RESULT" == Error:* ]]; then
-  tandem_log warn "pre-compaction state capture failed${RESULT:+ ($RESULT)}"
+if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
+  tandem_log warn "pre-compaction state capture failed"
   exit 0
 fi
 

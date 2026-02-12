@@ -85,7 +85,7 @@ fi
 # ─── Phase 1: Recall — compact MEMORY.md ───────────────────────────────────
 
 recall_compact() {
-  tandem_require_claude || return 1
+  tandem_require_llm || return 1
 
   PROGRESS_CONTENT=$(cat "$MEMORY_DIR/progress.md")
   MEMORY_CONTENT=""
@@ -139,19 +139,10 @@ Produce the compacted MEMORY.md now."
 
   tandem_log info "compacting memory"
 
-  # Call claude -p with haiku and budget cap
-  # --system-prompt "" --tools "" strips context overhead (CLAUDE.md, MCP servers, skills)
-  # Budget must exceed ~$0.06 base cost of a claude -p invocation
-  RESULT=$(echo "$PROMPT" | claude -p --model haiku --max-budget-usd 0.15 --system-prompt "" --tools "" 2>/dev/null)
+  RESULT=$(tandem_llm_call "$PROMPT")
 
   if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
-    tandem_log error "compaction failed: LLM returned empty (network or API issue)"
-    return 1
-  fi
-
-  # claude -p returns exit 0 even on budget exceeded — check for error prefix
-  if [[ "$RESULT" == Error:* ]]; then
-    tandem_log error "compaction failed: ${RESULT}"
+    tandem_log error "compaction failed: LLM returned empty"
     return 1
   fi
 
@@ -298,7 +289,7 @@ Produce the compacted MEMORY.md now."
 # ─── Phase 2: Grow — extract learnings to profile ───────────────────────────
 
 grow_extract() {
-  tandem_require_claude || return 1
+  tandem_require_llm || return 1
 
   PROGRESS_CONTENT=$(cat "$MEMORY_DIR/progress.md")
 
@@ -381,17 +372,10 @@ Review the session and extract learnings now."
 
   tandem_log info "extracting learnings"
 
-  # Call claude -p with haiku and budget cap
-  RESULT=$(echo "$PROMPT" | claude -p --model haiku --max-budget-usd 0.15 --system-prompt "" --tools "" 2>/dev/null)
+  RESULT=$(tandem_llm_call "$PROMPT")
 
   if [ $? -ne 0 ] || [ -z "$RESULT" ]; then
-    tandem_log error "extraction failed: LLM returned empty (network or API issue)"
-    return 1
-  fi
-
-  # claude -p returns exit 0 even on budget exceeded — check for error prefix
-  if [[ "$RESULT" == Error:* ]]; then
-    tandem_log error "extraction failed: ${RESULT}"
+    tandem_log error "extraction failed: LLM returned empty"
     return 1
   fi
 

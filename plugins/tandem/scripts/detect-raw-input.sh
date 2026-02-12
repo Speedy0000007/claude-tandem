@@ -20,7 +20,7 @@ if [ "$LENGTH" -lt "$MIN_LENGTH" ]; then
   exit 0
 fi
 
-tandem_require_claude || exit 0
+tandem_require_llm || exit 0
 
 # Stage 2: haiku assessment
 HAIKU_PROMPT="Assess this user prompt. Three possible outcomes:
@@ -41,7 +41,7 @@ Output ONLY the result (SKIP, restructured text, or CLARIFY block). No preamble.
 User prompt:
 ${PROMPT}"
 
-RESULT=$(echo "$HAIKU_PROMPT" | claude -p --model haiku --max-budget-usd 0.10 2>/dev/null)
+RESULT=$(tandem_llm_call "$HAIKU_PROMPT")
 [ -z "$RESULT" ] && exit 0
 
 # Trim whitespace for comparison

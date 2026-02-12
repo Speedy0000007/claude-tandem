@@ -6,13 +6,27 @@ Tandem uses environment variables to control behavior across its three features 
 
 | Variable | Default | Purpose | Example |
 |----------|---------|---------|---------|
+| `TANDEM_LLM_BACKEND` | `claude` | LLM endpoint: `claude` or OpenAI-compatible URL | `http://localhost:11434` (Ollama) |
+| `TANDEM_LLM_MODEL` | `haiku` | Model name. Required for URL backends. | `llama3.2`, `mistral` |
+| `TANDEM_LLM_API_KEY` | (none) | Bearer token for remote endpoints | `sk-...` |
 | `TANDEM_CLARIFY_MIN_LENGTH` | `200` | Minimum prompt character count before Clarify assessment | `500` (skip short prompts) |
 | `TANDEM_CLARIFY_QUIET` | `0` | Suppress "Clarified." status indicator | `1` (silent mode) |
 | `TANDEM_LOG_LEVEL` | `info` | Log verbosity: `error`, `warn`, `info`, `debug` | `debug` (verbose for troubleshooting) |
 | `TANDEM_PROFILE_DIR` | `~/.tandem/profile` | Location for learning profile files (Grow) | `~/Dropbox/tandem` (sync across machines) |
 | `TANDEM_QUIET` | `0` | Suppress all Tandem status output | `1` (dogfooding mode) |
+| `TANDEM_AUTO_COMMIT` | `1` | Enable/disable session-end auto-commits | `0` (disable) |
 
 ### Setting Environment Variables
+
+**`.env` file (recommended):**
+
+Tandem loads `~/.tandem/.env` on every hook invocation. Copy from `.env.sample`:
+
+```bash
+cp .env.sample ~/.tandem/.env
+```
+
+Edit `~/.tandem/.env` and uncomment the variables you want to change.
 
 **Shell profile (persistent):**
 
@@ -157,6 +171,7 @@ Tandem never writes to user repositories. All data goes to Claude Code's native 
 | `~/.tandem/state/recurrence.json` | Recurring theme tracker |
 | `~/.tandem/logs/tandem.log` | Unified activity/error log (all hooks) |
 | `~/.tandem/logs/clarify.jsonl` | Clarify decision log (for review) |
+| `~/.tandem/.env` | Environment variable overrides (loaded by every hook) |
 | `~/.tandem/.provisioned` | First-run marker file |
 | `~/.tandem/next-nudge` | Ephemeral learning nudge for next session |
 
@@ -221,6 +236,37 @@ SessionStart detects corrupted MEMORY.md (< 5 lines, starts with refusal pattern
 Backups: `~/.claude/projects/<cwd-sanitized>/memory/.MEMORY.md.backup-<timestamp>` (last 3 kept)
 
 ## Advanced Configuration
+
+### LLM Backend
+
+By default, Tandem uses `claude -p` (the Claude CLI) for all background LLM calls. You can point to any OpenAI-compatible endpoint instead, useful for local models (Ollama, LM Studio, vLLM) or cheaper hosted alternatives.
+
+**Local Ollama:**
+
+```bash
+# ~/.tandem/.env
+TANDEM_LLM_BACKEND=http://localhost:11434
+TANDEM_LLM_MODEL=llama3.2
+```
+
+**LM Studio:**
+
+```bash
+TANDEM_LLM_BACKEND=http://localhost:1234
+TANDEM_LLM_MODEL=mistral
+```
+
+**Remote endpoint with auth:**
+
+```bash
+TANDEM_LLM_BACKEND=https://api.together.xyz
+TANDEM_LLM_MODEL=meta-llama/Llama-3-8b-chat-hf
+TANDEM_LLM_API_KEY=your-api-key
+```
+
+`TANDEM_LLM_MODEL` is required when using a URL backend. The model name must match what the endpoint expects.
+
+All Tandem LLM calls are low-reasoning admin tasks (memory compaction, learning extraction, prompt assessment). They do not need frontier models. A 7B-8B parameter local model works well.
 
 ### Custom Profile Location (Sync Across Machines)
 
