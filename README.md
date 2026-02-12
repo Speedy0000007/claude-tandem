@@ -41,6 +41,14 @@ Tandem is a Claude Code plugin with four features:
 
 Each feature is independently valuable. Combined, they compound: better input leads to a smarter agent, richer commit history captures the reasoning permanently, and learning compounds across every session.
 
+### Pure bash. Zero overhead.
+
+No Node. No Python. No MCP servers. No background processes. No databases. Just seven shell scripts, a shared library, and `jq`.
+
+Tandem runs entirely through Claude Code's native hook system. Every feature is a plain bash script that fires on a lifecycle event, does its work, and exits. Nothing runs between hooks. Nothing persists in memory. Nothing phones home. The entire runtime is `~/.tandem/` and a handful of rules files.
+
+Dependencies: `bash 3.2+` and `jq`. That's it. No `npm install`, no `pip install`, no compilation step, no container. Install in seconds, read the entire codebase in an afternoon.
+
 ---
 
 ## Install
@@ -92,16 +100,15 @@ If Claude Code ships a native version of something Tandem does, Tandem should ge
 
 ### Clarify
 
-Garbage in, garbage out — the oldest engineering principle. Clarify fixes the input.
+Garbage in, garbage out. Clarify fixes the input.
 
-A UserPromptSubmit hook detects long, unstructured input (dictation, brain dumps, walls of text) and automatically restructures it using an 8-section prompt framework backed by Anthropic's official prompting best practices.
+A UserPromptSubmit hook detects long, unstructured input (dictation, brain dumps, walls of text) and sends it to a lightweight LLM for assessment. Three outcomes: **SKIP** (already clear), **RESTRUCTURE** (rewritten for clarity), or **CLARIFY** (ambiguity detected, questions generated before work begins).
 
-**What you see:** Your messy input executes cleanly. A `Clarified.` indicator appears when restructuring happened.
+**What you see:** Your messy input executes cleanly. A `Clarified.` indicator appears when restructuring happened. If questions are needed, they appear before any work starts.
 
-**Configurable thresholds:**
-- `PREPROCESSOR_MIN_LENGTH` — minimum characters before checking structure (default: 500)
-- `PREPROCESSOR_MAX_STRUCTURE` — max structural markers before skipping (default: 2)
-- `TANDEM_CLARIFY_SHOW=1` — print the restructured version before executing (default: off)
+**Configurable:**
+- `TANDEM_CLARIFY_MIN_LENGTH` — minimum characters before assessment triggers (default: 200)
+- `TANDEM_CLARIFY_QUIET=1` — suppress branding in Clarify output (default: off)
 
 ### Recall
 
@@ -124,15 +131,16 @@ Tandem treats every commit as a context restoration point. Not just what changed
 
 - **Commit body enforcement** — a PreToolUse hook ensures every commit has a body that captures the developer's thinking. Subject line follows Conventional Commits. Body captures the why, the what-else, the what-next.
 - **Session checkpoints** — at session end, before memory compaction, Tandem auto-commits a checkpoint that preserves the full session context in git. Only commits when there are actual staged changes.
+- **Auto-commit squash** — checkpoint commits are automatically squashed into your next real commit, keeping history clean. If you try to push with un-squashed checkpoints, the push is blocked with guidance on how to resolve it. Run `/tandem:squash` for manual control.
 - **`## Last Session` continuation** — every memory compaction writes a `## Last Session` section to MEMORY.md with what was being worked on, where it left off, and what comes next. The next session picks up immediately, even when no code was changed.
-- **Creative safety net** — when context is always preserved, you can be brave. Try things. Explore freely. If you revert, the reasoning that led to the attempt is still in the commit history.
 
 The result: `git log` becomes a complete, queryable history of every AI session. Combined with any tool that can read git history, you can ask "why is this code the way it is?" at any point and get the full reasoning from the session that wrote it.
 
-**What you see:** If you try to commit without a body, the hook blocks it and feeds you session context to write from. At session end, `Session captured` confirms the checkpoint was written. MEMORY.md always has a `## Last Session` section with continuation context.
+**What you see:** If you try to commit without a body, the hook blocks it and feeds you session context to write from. At session end, `Session captured` confirms the checkpoint was written. On next session start, you'll see how many auto-commits are pending and whether they'll be auto-squashed.
 
 **Configurable:**
 - `TANDEM_AUTO_COMMIT=0` — disable auto-commits at session end (default: enabled)
+- `TANDEM_AUTO_SQUASH=0` — disable auto-squash on commit (default: enabled). The push guard stays active regardless.
 
 ### Grow
 
@@ -171,18 +179,36 @@ Tandem uses Claude Code's native hook system. Zero background services, zero dat
 | Event | Script | Purpose |
 |-------|--------|---------|
 | PreToolUse | `validate-commit.sh` | Conventional commit format + body enforcement |
+| PreToolUse | `squash-autocommits.sh` | Auto-squash checkpoints on commit, block push with un-squashed checkpoints |
 | UserPromptSubmit | `detect-raw-input.sh` | Clarify detection |
 | SessionStart | `session-start.sh` | Provisioning, post-compaction state recovery, cross-project context, stale progress detection |
 | SessionEnd | `session-end.sh` | Session checkpoint (phase 0) + memory compaction (phase 1) + pattern extraction (phase 2) + global log (phase 3) |
 | PreCompact | `pre-compact.sh` | Current state snapshot + progress safety net |
 | TaskCompleted | `task-completed.sh` | Async progress nudge when progress.md is stale |
 
+### LLM backend
+
+By default, all background LLM calls use `claude -p --model haiku` with a $0.15 budget cap per call. These are low-reasoning admin tasks (memory compaction, learning extraction, prompt assessment) that don't need frontier models.
+
+You can point Tandem at any OpenAI-compatible endpoint instead, useful for local models or cheaper hosted alternatives:
+
+```bash
+# ~/.tandem/.env
+TANDEM_LLM_BACKEND=http://localhost:11434   # Ollama
+TANDEM_LLM_MODEL=llama3.2
+```
+
+A 7-8B parameter local model works well. See [CONFIGURATION.md](CONFIGURATION.md) for full backend options.
+
 ### Cost
 
-LLM-calling hooks use `claude -p --model haiku` with budget caps:
-- **SessionEnd** — `--max-budget-usd 0.05`. Only fires when there's a `progress.md` to process. Typical cost: $0.001-0.01 per session end.
-- **PreCompact** — `--max-budget-usd 0.03`. Fires before each compaction to capture current state. Typical cost: $0.01-0.02 per compaction.
-- **TaskCompleted** — no LLM call. Just a file stat check (milliseconds).
+With the default Haiku backend, each LLM call has a $0.15 budget cap. Only hooks with substantive content make LLM calls:
+- **SessionEnd** — 2 calls (Recall compaction + Grow extraction). Only fires when `progress.md` exists.
+- **PreCompact** — 1 call. State snapshot before compaction.
+- **UserPromptSubmit** — 1 call. Only fires on prompts longer than 200 characters.
+- **TaskCompleted** — no LLM call. Just a file stat check.
+
+Typical session cost: **$0.03-0.08**. With a local LLM backend: **$0**.
 
 ### Files created
 
@@ -191,6 +217,30 @@ Tandem creates zero files in your repositories. Everything lives in:
 - `~/.claude/projects/{project}/memory/progress.md` — session bridge (alongside native MEMORY.md)
 - `~/.tandem/profile/` — learning profile
 - `~/.tandem/memory/global.md` — cross-project activity log (30 entries max)
+
+---
+
+## Configuration
+
+All configuration is via environment variables, set in `~/.tandem/.env` (loaded on every hook invocation). Copy the sample:
+
+```bash
+cp .env.sample ~/.tandem/.env
+```
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `TANDEM_LLM_BACKEND` | `claude` | LLM endpoint. Set to an OpenAI-compatible URL for local models. |
+| `TANDEM_LLM_MODEL` | `haiku` | Model name. Required for URL backends (e.g. `llama3.2`, `mistral`). |
+| `TANDEM_LLM_API_KEY` | (none) | Bearer token for remote endpoints. Not needed for local models. |
+| `TANDEM_AUTO_COMMIT` | `1` | Enable session-end auto-commits. Set to `0` to disable. |
+| `TANDEM_AUTO_SQUASH` | `1` | Auto-squash checkpoints into next commit. Set to `0` to disable. Push guard stays active. |
+| `TANDEM_CLARIFY_MIN_LENGTH` | `200` | Minimum prompt length (chars) before Clarify triggers. |
+| `TANDEM_CLARIFY_QUIET` | `0` | Suppress Clarify branding in output. |
+| `TANDEM_LOG_LEVEL` | `info` | Log verbosity: `error`, `warn`, `info`, `debug`. |
+| `TANDEM_PROFILE_DIR` | `~/.tandem/profile` | Location for Grow profile files. |
+
+See [CONFIGURATION.md](CONFIGURATION.md) for advanced options, hook input schemas, and file locations.
 
 ---
 

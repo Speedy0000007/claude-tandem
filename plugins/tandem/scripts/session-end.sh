@@ -194,8 +194,7 @@ Produce the compacted MEMORY.md now."
     return 1
   fi
 
-  echo "$MEMORY_RESULT" > "$TMPFILE"
-  if [ $? -ne 0 ] || [ ! -s "$TMPFILE" ]; then
+  if ! echo "$MEMORY_RESULT" > "$TMPFILE" || [ ! -s "$TMPFILE" ]; then
     tandem_log error "failed to write MEMORY.md temp file (disk full?)"
     rm -f "$TMPFILE"
     return 1
@@ -215,8 +214,7 @@ Produce the compacted MEMORY.md now."
     UPDATED_STATS=$(jq '.compactions += 1' "$STATS_FILE")
     TMPSTATS=$(mktemp "$STATS_FILE.XXXXXX")
     if [ -n "$TMPSTATS" ] && [ -f "$TMPSTATS" ]; then
-      echo "$UPDATED_STATS" > "$TMPSTATS"
-      if [ $? -eq 0 ] && [ -s "$TMPSTATS" ]; then
+      if echo "$UPDATED_STATS" > "$TMPSTATS" && [ -s "$TMPSTATS" ]; then
         mv "$TMPSTATS" "$STATS_FILE"
       else
         rm -f "$TMPSTATS"
@@ -277,8 +275,7 @@ Produce the compacted MEMORY.md now."
     if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
       tandem_log warn "failed to create temp file for recurrence.json"
     else
-      echo "$RECURRENCE" > "$TMPFILE"
-      if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
+      if echo "$RECURRENCE" > "$TMPFILE" && [ -s "$TMPFILE" ]; then
         mv "$TMPFILE" "$RECURRENCE_FILE"
       else
         tandem_log warn "failed to write recurrence.json temp file"
@@ -414,8 +411,7 @@ Review the session and extract learnings now."
         if [ "$REPLACE_MODE" = true ]; then
           TMPFILE=$(mktemp "$PROFILE_DIR/${SLUG}.md.XXXXXX")
           if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
-            echo "$CURRENT_CONTENT" > "$TMPFILE"
-            if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
+            if echo "$CURRENT_CONTENT" > "$TMPFILE" && [ -s "$TMPFILE" ]; then
               mv "$TMPFILE" "$TARGET"
               UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
             else
@@ -450,8 +446,7 @@ Review the session and extract learnings now."
         if [ "$REPLACE_MODE" = true ]; then
           TMPFILE=$(mktemp "$PROFILE_DIR/${SLUG}.md.XXXXXX")
           if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
-            echo "$CURRENT_CONTENT" > "$TMPFILE"
-            if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
+            if echo "$CURRENT_CONTENT" > "$TMPFILE" && [ -s "$TMPFILE" ]; then
               mv "$TMPFILE" "$TARGET"
               UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
             else
@@ -485,8 +480,7 @@ Review the session and extract learnings now."
     if [ "$REPLACE_MODE" = true ]; then
       TMPFILE=$(mktemp "$PROFILE_DIR/${SLUG}.md.XXXXXX")
       if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
-        echo "$CURRENT_CONTENT" > "$TMPFILE"
-        if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
+        if echo "$CURRENT_CONTENT" > "$TMPFILE" && [ -s "$TMPFILE" ]; then
           mv "$TMPFILE" "$TARGET"
           UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
         else
@@ -529,8 +523,7 @@ Review the session and extract learnings now."
     UPDATED_STATS=$(jq --arg lines "$TOTAL_LINES" '.profile_updates += 1 | .profile_total_lines = ($lines | tonumber)' "$STATS_FILE")
     TMPSTATS=$(mktemp "$STATS_FILE.XXXXXX")
     if [ -n "$TMPSTATS" ] && [ -f "$TMPSTATS" ]; then
-      echo "$UPDATED_STATS" > "$TMPSTATS"
-      if [ $? -eq 0 ] && [ -s "$TMPSTATS" ]; then
+      if echo "$UPDATED_STATS" > "$TMPSTATS" && [ -s "$TMPSTATS" ]; then
         mv "$TMPSTATS" "$STATS_FILE"
       else
         rm -f "$TMPSTATS"
@@ -650,7 +643,7 @@ if [ "$RECALL_STATUS" -eq 1 ] && [ -f "$MEMORY_DIR/MEMORY.md" ]; then
 fi
 
 if [ "$GROW_STATUS" -eq 1 ]; then
-  UPDATED=$(find "$PROFILE_DIR" -name "*.md" -mmin -5 2>/dev/null | xargs -I {} basename {} 2>/dev/null | tr '\n' ',' | sed 's/,$//')
+  UPDATED=$(find "$PROFILE_DIR" -name "*.md" -mmin -5 -exec basename {} \; 2>/dev/null | tr '\n' ',' | sed 's/,$//')
   if [ -n "$UPDATED" ]; then
     echo "profile_files: $UPDATED" >> "$RECAP_FILE"
   fi

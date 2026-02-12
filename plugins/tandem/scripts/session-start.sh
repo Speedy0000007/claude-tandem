@@ -241,8 +241,7 @@ if [ -f "$STATS_FILE" ]; then
 
     TMPFILE=$(mktemp "$STATS_FILE.XXXXXX")
     if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
-      echo "$NEW_STATS" > "$TMPFILE"
-      if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
+      if echo "$NEW_STATS" > "$TMPFILE" && [ -s "$TMPFILE" ]; then
         mv "$TMPFILE" "$STATS_FILE"
       else
         rm -f "$TMPFILE"
