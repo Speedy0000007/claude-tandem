@@ -1,15 +1,15 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Tandem — memory management plugin for Claude Code" width="320">
+  <img src="assets/logo.png" alt="Tandem — companion plugin for Claude Code with persistent memory, session handover, and developer learning" width="320">
 </p>
 
 <h1 align="center">Tandem</h1>
 
 <p align="center">
-  <strong>Persistent memory for Claude Code. Every session picks up where the last one left off.</strong>
+  <strong>A companion plugin for Claude Code that handles the work around the work.</strong>
 </p>
 
 <p align="center">
-  <sub>Session handover, memory compaction, cross-project context, and durable commit history. Pure bash, zero dependencies.</sub>
+  <sub>Persistent memory, session handover, input cleanup, context compaction, commit enrichment, and developer learning. Pure bash, zero dependencies.</sub>
 </p>
 
 ```bash
@@ -18,7 +18,7 @@ claude "Let's work in Tandem"
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/version-v1.2.1-green.svg" alt="Version: v1.2.1">
+  <img src="https://img.shields.io/badge/version-v1.3.0-green.svg" alt="Version: v1.3.0">
   <img src="https://img.shields.io/badge/platform-Claude%20Code-blueviolet.svg" alt="Platform: Claude Code">
   <img src="https://img.shields.io/badge/shell-bash-orange.svg" alt="Shell: bash">
   <a href="https://github.com/jonny981/claude-tandem/actions/workflows/test.yml"><img src="https://github.com/jonny981/claude-tandem/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
@@ -28,15 +28,15 @@ claude "Let's work in Tandem"
 
 ## The problem
 
-Claude Code has no persistent memory between sessions. MEMORY.md gets truncated at 200 lines. Context compaction erases your working state mid-session. There's no way to hand off context from one session to the next, no handover.md, no progress file that survives compaction. And there's zero cross-project awareness: sessions in one repo have no idea what you were doing in another.
+AI coding agents are powerful, but the session lifecycle is broken. Claude Code has no persistent memory between sessions. MEMORY.md gets truncated at 200 lines. Context compaction erases your working state mid-session. There's no handover file, no progress.md that survives compaction, no cross-project awareness. Messy prompts produce messy output. Commit messages capture what changed but not why. And the developer learns nothing from the process.
 
-These are the same memory problems that affect every AI coding agent. Tandem solves them for Claude Code using nothing but Claude Code's native hook system.
+Every session starts from scratch. Tandem fixes this by handling the work that happens around the building: memory, context, input quality, reasoning preservation, and learning. All through Claude Code's native hook system, zero external dependencies.
 
 ---
 
 ## What it does
 
-Tandem is a memory management plugin for Claude Code. Four features, each targeting a different gap in how coding agents handle context and recall:
+Tandem is a Claude Code plugin that runs alongside your sessions, handling memory, context, input quality, and learning so you can focus on building. Four features, each targeting a different gap in the coding agent workflow:
 
 <table>
   <tr>
@@ -94,7 +94,7 @@ To start a session without Tandem features, use `claude "Skip Tandem"` instead.
 
 Claude Code already has auto-memory, MEMORY.md, context compaction, and a hook system. Tandem doesn't build parallel infrastructure. It makes the native memory systems work better.
 
-- **Auto-memory writes MEMORY.md.** Tandem compacts it to stay under the 200-line loading limit.
+- **Auto-memory writes MEMORY.md.** Tandem compacts it with priority-based retention so architectural decisions survive indefinitely while debugging details decay naturally.
 - **Claude Code has no cross-project awareness.** Tandem adds a lightweight rolling log so sessions in one repo know what you've been doing elsewhere.
 - **Claude Code has no session bridge.** Tandem adds progress.md alongside MEMORY.md — same directory, same conventions.
 - **Git is already the permanent record.** Tandem enriches commit messages with session context so nothing is lost to compaction. Your thinking persists in `git log` forever.
@@ -122,12 +122,12 @@ A UserPromptSubmit hook detects long, unstructured input (dictation, brain dumps
 
 Claude already remembers. Recall makes it *good* at remembering.
 
-- **Session bridge via progress.md** — maintains a running `progress.md` alongside MEMORY.md, acting as a session handover file that survives context compaction
-- **Pre-compaction safety net** — a PreCompact hook captures the precise "where are we right now" before compaction compresses in-memory context. After compaction, SessionStart surfaces this snapshot so Claude picks up exactly where it left off
-- **Memory compaction** — at session end, rewrites MEMORY.md to stay under 200 lines (the native loading limit). Keeps what's relevant, lets stale details decay
-- **Cross-project context** — at session end, logs a summary of what happened to a global rolling log (`~/.tandem/memory/global.md`, 30 entries max). At session start, Claude sees recent activity from other projects for cross-repo awareness
-- **Progress nudges** — when a task completes and progress.md is stale, an async nudge reminds Claude to record what happened
-- **Pattern promotion** — recurring patterns are surfaced as candidates for CLAUDE.md with suggested promotion targets
+- **Session bridge via progress.md** — maintains a two-part `progress.md` alongside MEMORY.md: a rewritable Working State snapshot (current task, approach, blockers, key files) and an append-only Session Log below. Survives context compaction.
+- **Pre-compaction safety net** — a PreCompact hook captures the precise "where are we right now" before compaction. When structured Working State markers exist, this is deterministic (no LLM needed). After compaction, SessionStart surfaces this snapshot so Claude picks up exactly where it left off.
+- **Priority-based memory compaction** — at session end, rewrites MEMORY.md to stay under 200 lines using three priority tiers: [P1] permanent (architecture, preferences), [P2] active (current state, recent decisions), [P3] ephemeral (debugging details). Each entry carries temporal metadata (observed: YYYY-MM-DD) for evidence-based pruning.
+- **Cross-project context** — at session end, logs a summary of what happened to a global rolling log (`~/.tandem/memory/global.md`, 30 entries max). At session start, Claude sees recent activity from other projects for cross-repo awareness.
+- **Progress nudges** — when a task completes and progress.md is stale, an async nudge reminds Claude to record what happened.
+- **Pattern promotion** — recurring patterns are auto-promoted during compaction and surfaced as candidates for CLAUDE.md. Run `/tandem:recall promote` to manually promote high-recurrence themes.
 
 **What you see:** `Recalled.` at session start means the previous session's memory was compacted. `Recent work in other projects:` shows what you've been doing elsewhere. After compaction, `Resuming. Before compaction you were: ...` restores your exact position. If a session ends abnormally, stale progress is detected and recovered next time.
 
@@ -210,7 +210,7 @@ A 7-8B parameter local model works well. See [CONFIGURATION.md](CONFIGURATION.md
 
 With the default Haiku backend, each LLM call has a $0.15 budget cap. Only hooks with substantive content make LLM calls:
 - **SessionEnd** — 2 calls (Recall compaction + Grow extraction). Only fires when `progress.md` exists.
-- **PreCompact** — 1 call. State snapshot before compaction.
+- **PreCompact** — 1 call (skipped when structured Working State exists). State snapshot before compaction.
 - **UserPromptSubmit** — 1 call. Only fires on prompts longer than 200 characters.
 - **TaskCompleted** — no LLM call. Just a file stat check.
 
@@ -220,7 +220,7 @@ Typical session cost: **$0.03-0.08**. With a local LLM backend: **$0**.
 
 Tandem creates zero files in your repositories. Everything lives in:
 - `~/.claude/rules/tandem-*.md` — behavioural rules including commit body enforcement (install = copy, uninstall = delete)
-- `~/.claude/projects/{project}/memory/progress.md` — session bridge (alongside native MEMORY.md)
+- `~/.claude/projects/{project}/memory/progress.md` — session bridge with structured Working State + Session Log (alongside native MEMORY.md)
 - `~/.tandem/profile/` — learning profile
 - `~/.tandem/memory/global.md` — cross-project activity log (30 entries max)
 
