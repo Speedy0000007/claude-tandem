@@ -68,7 +68,7 @@ ${TRANSCRIPT_TAIL}
 # Call haiku
 tandem_require_claude || exit 0
 
-RESULT=$(TANDEM_WORKER=1 claude -p --model haiku --max-budget-usd 0.10 --system-prompt "" --tools "" 2>/dev/null <<< "$PROMPT")
+RESULT=$(TANDEM_WORKER=1 claude -p --model haiku --max-budget-usd 0.15 --system-prompt "" --tools "" 2>/dev/null <<< "$PROMPT")
 
 if [ $? -ne 0 ] || [ -z "$RESULT" ] || [[ "$RESULT" == Error:* ]]; then
   tandem_log warn "pre-compaction state capture failed${RESULT:+ ($RESULT)}"
