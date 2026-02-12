@@ -122,12 +122,13 @@ Git is the only permanent record. Progress.md gets compacted. MEMORY.md gets rew
 Tandem treats every commit as a context restoration point. Not just what changed, but why: what process led here, what was considered, what constraints existed, what was known and unknown at the time.
 
 - **Commit body enforcement** — a PreToolUse hook ensures every commit has a body that captures the developer's thinking. Subject line follows Conventional Commits. Body captures the why, the what-else, the what-next.
-- **Session checkpoints** — at session end, before memory compaction, Tandem auto-commits a checkpoint that preserves the full session context in git. Even sessions with no code changes get a context commit. Nothing is lost to compaction.
+- **Session checkpoints** — at session end, before memory compaction, Tandem auto-commits a checkpoint that preserves the full session context in git. Only commits when there are actual staged changes.
+- **`## Last Session` continuation** — every memory compaction writes a `## Last Session` section to MEMORY.md with what was being worked on, where it left off, and what comes next. The next session picks up immediately, even when no code was changed.
 - **Creative safety net** — when context is always preserved, you can be brave. Try things. Explore freely. If you revert, the reasoning that led to the attempt is still in the commit history.
 
 The result: `git log` becomes a complete, queryable history of every AI session. Combined with any tool that can read git history, you can ask "why is this code the way it is?" at any point and get the full reasoning from the session that wrote it.
 
-**What you see:** If you try to commit without a body, the hook blocks it and feeds you session context to write from. At session end, `Session captured` confirms the checkpoint was written. Next session, if a checkpoint exists, you're notified to review or amend it.
+**What you see:** If you try to commit without a body, the hook blocks it and feeds you session context to write from. At session end, `Session captured` confirms the checkpoint was written. MEMORY.md always has a `## Last Session` section with continuation context.
 
 **Configurable:**
 - `TANDEM_AUTO_COMMIT=0` — disable auto-commits at session end (default: enabled)

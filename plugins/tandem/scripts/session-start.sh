@@ -394,7 +394,7 @@ if [ -f "$MEMORY_DIR/progress.md" ]; then
   if [ -n "$PROGRESS_MTIME" ]; then
     AGE=$((SESSION_START - PROGRESS_MTIME))
     if [ "$AGE" -gt 300 ]; then
-      echo "Stale progress.md detected. Review and incorporate context."
+      echo "Previous session notes found. Context carried forward."
     fi
   fi
 fi

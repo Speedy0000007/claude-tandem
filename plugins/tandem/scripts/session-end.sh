@@ -26,6 +26,21 @@ if [ "${1:-}" = "--worker" ]; then
 
   # Functions are defined below — execution continues after function definitions
   TANDEM_WORKER=1
+
+  tandem_log info "worker started (pid $$)"
+
+  # PID lockfile to prevent double-fire
+  LOCKFILE="$HOME/.tandem/state/.worker.lock"
+  if [ -f "$LOCKFILE" ]; then
+    LOCK_PID=$(cat "$LOCKFILE" 2>/dev/null)
+    if kill -0 "$LOCK_PID" 2>/dev/null; then
+      tandem_log debug "worker already running (pid $LOCK_PID)"
+      exit 0
+    fi
+  fi
+  mkdir -p "$(dirname "$LOCKFILE")"
+  echo $$ > "$LOCKFILE"
+  trap 'rm -f "$LOCKFILE"' EXIT
 fi
 
 # ─── Hook mode: parse input, inform user, spawn worker ────────────────────
@@ -53,8 +68,9 @@ if [ -z "${TANDEM_WORKER:-}" ]; then
   tandem_print "Session captured (${PROGRESS_LINES} lines). Compacting memory..."
   tandem_log info "session end: ${PROGRESS_LINES} lines of progress"
 
-  # Spawn named worker process and exit
-  "$0" --worker "$CWD" &
+  # Spawn detached worker process and exit
+  nohup "$0" --worker "$CWD" </dev/null &>/dev/null &
+  disown
   exit 0
 fi
 
@@ -78,22 +94,23 @@ recall_compact() {
   fi
 
   # Build the compaction prompt
-  PROMPT=$(cat <<'PROMPT_EOF'
+  PROMPT=$(cat <<PROMPT_EOF
 You are a memory compaction agent. Your job is to produce a concise, well-structured MEMORY.md file that stays under 200 lines.
 
 You will receive two inputs:
 1. The current MEMORY.md (may be empty)
-2. The session's progress.md
+2. The session progress notes
 
 Instructions:
 - Start from the existing MEMORY.md content as your base
 - Merge in key facts, decisions, patterns, and context from progress.md
 - Prune stale or redundant entries — anything no longer relevant to active work
 - Stay under 200 lines total (this is the native loading limit — beyond this, content is invisible)
-- Leave any `## User Context` section completely intact (user-authored, not for compaction)
+- Leave any \`## User Context\` section completely intact (user-authored, not for compaction)
 - Do NOT reference or modify other files in the memory/ directory
 - Output ONLY the new MEMORY.md content — no explanation, no code fences, no preamble
-- Also identify 1-3 recurring themes from this session as lowercase-hyphenated slugs. If a slug matches an existing theme, reuse it. Output the themes on their own line at the very end: `THEMES: slug-1, slug-2`
+- Always include a \`## Last Session\` section at the very end (before the THEMES line). This section is replaced every compaction, never accumulated. It should contain: what was being worked on, where it left off, what comes next. Write it so the next session can continue immediately. 2-5 lines max.
+- Also identify 1-3 recurring themes from this session as lowercase-hyphenated slugs. If a slug matches an existing theme, reuse it. Output the themes on their own line at the very end: \`THEMES: slug-1, slug-2\`
 
 PROMPT_EOF
   )
@@ -291,18 +308,18 @@ ${FCONTENT}
   fi
 
   # Build the extraction prompt
-  PROMPT=$(cat <<'PROMPT_EOF'
-You are a learning extraction agent. Review this session's progress and identify what the user learned, practiced, or deepened understanding of.
+  PROMPT=$(cat <<PROMPT_EOF
+You are a learning extraction agent. Review the session progress and identify what the user learned, practiced, or deepened understanding of.
 
 If there are learnings worth persisting, output changes to their profile directory. No rigid format — organise however best serves this user. Consider their career context if provided.
 
 Rules:
 - Only persist genuinely valuable learnings (skip routine operations)
-- Don't duplicate what's already in the profile
+- Do not duplicate what is already in the profile
 - Keep entries concise and actionable
-- Pay special attention to recurring themes (provided below) — if a theme keeps appearing but the profile has thin coverage, that's a high-priority learning to capture
+- Pay special attention to recurring themes (provided below) — if a theme keeps appearing but the profile has thin coverage, that is a high-priority learning to capture
 - If you identify a high-impact learning opportunity, prioritise gaps: recurring themes where the profile has thin or no coverage. A theme appearing in 5+ sessions with no profile entry is a stronger NUDGE candidate than a novel concept from a single session. Output: NUDGE: [one sentence]
-- If the session notes mention the user's role, company, tech stack, goals, strengths, or career direction, update career-context.md accordingly. Merge new information with existing content — never overwrite what's already there, only enrich. For career-context.md, output the full updated file (not append).
+- If the session notes mention the user role, company, tech stack, goals, strengths, or career direction, update career-context.md accordingly. Merge new information with existing content — never overwrite what is already there, only enrich. For career-context.md, output the full updated file (not append).
 
 Output format for each file:
 FILE: [filename]
@@ -524,12 +541,8 @@ checkpoint_commit() {
   git -C "$CWD" add -u 2>/dev/null
 
   if git -C "$CWD" diff --cached --quiet 2>/dev/null; then
-    tandem_log info "checkpoint: empty commit (no staged changes)"
-    git -C "$CWD" commit --allow-empty \
-      -m "$(printf 'chore(tandem): session context\n\n%s' "$body")" 2>/dev/null || {
-      tandem_log warn "checkpoint empty commit failed"
-      return 1
-    }
+    tandem_log info "checkpoint: no staged changes, skipping commit"
+    return 0
   else
     tandem_log info "checkpoint: committing staged changes"
     git -C "$CWD" commit \

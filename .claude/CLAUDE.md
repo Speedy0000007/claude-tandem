@@ -19,10 +19,10 @@ Claude Code already has auto-memory, MEMORY.md, context compaction, and a hook s
 - **Zero repo files** — Tandem never creates files inside user repositories. All data goes to `~/.claude/` (rules, memory) or `~/.tandem/` (profile).
 - **Built to be forked** — Tandem is open source and designed for customisation. `lib/tandem.sh` is a shared foundation that community scripts can source. Skills, hooks, and rules are modular. The architecture choices (shell scripts, no runtime deps, `CLAUDE_PLUGIN_ROOT` paths, atomic writes) exist so that anyone comfortable with bash can read, modify, and extend Tandem.
 - **PreToolUse hook** — `validate-commit.sh` enforces conventional commit format + body presence on all git commits. Sources `lib/tandem.sh`. Reads progress.md to feed context back in denial messages. 5s timeout.
-- **SessionEnd hooks** — sync hook with fast exit. Prints informational message (visible to user), then backgrounds Phase 0 (checkpoint commit) + LLM calls (`claude -p --model haiku --max-budget-usd 0.05`) in a subshell and exits immediately.
+- **SessionEnd hooks** — sync hook with fast exit. Prints informational message (visible to user), then spawns a detached worker (`nohup ... </dev/null &>/dev/null & disown`) for Phase 0 (checkpoint commit) + LLM calls (`claude -p --model haiku --max-budget-usd 0.05`). PID lockfile (`~/.tandem/state/.worker.lock`) prevents overlapping workers.
 - **PreCompact hook** — captures current state snapshot + progress safety net before compaction. Uses `--max-budget-usd 0.03`. Always fires (state snapshot), but only extracts progress when progress.md is stale (>2 min).
 - **TaskCompleted hook** — async, no LLM call. Just checks progress.md staleness (>5 min) and outputs a `systemMessage` nudge if stale.
-- **`TANDEM_AUTO_COMMIT`** — env var controlling session-end auto-commits. Default: enabled (1). Set to `0` to disable checkpoint commits.
+- **`TANDEM_AUTO_COMMIT`** — env var controlling session-end auto-commits. Default: enabled (1). Set to `0` to disable checkpoint commits. Only commits when there are actual staged changes (no empty commits).
 - **Rules files** — provisioned to `~/.claude/rules/tandem-*.md` by `session-start.sh`. Install = copy, uninstall = delete. Never patch user's CLAUDE.md. Includes `tandem-commits.md` for commit body enforcement.
 - **Skill naming** — SKILL.md frontmatter uses short `name` (e.g., `clarify`), no prefix. The plugin system adds `tandem:` automatically.
 
@@ -39,14 +39,17 @@ Claude Code already has auto-memory, MEMORY.md, context compaction, and a hook s
 
 ## File layout
 
+All plugin code lives under `plugins/tandem/` in the repo root:
+
 ```
-.claude-plugin/     Plugin manifests
-hooks/              Hook wiring (hooks.json)
-lib/                Shared library (tandem.sh)
-scripts/            All executable hook scripts
-skills/             SKILL.md files (clarify, grow, logs, reload, status)
-rules/              Source rules files (provisioned to ~/.claude/rules/)
-templates/          Profile bootstrap templates
+plugins/tandem/
+  .claude-plugin/     Plugin manifests
+  hooks/              Hook wiring (hooks.json)
+  lib/                Shared library (tandem.sh)
+  scripts/            All executable hook scripts
+  skills/             SKILL.md files (clarify, grow, logs, reload, status)
+  rules/              Source rules files (provisioned to ~/.claude/rules/)
+  templates/          Profile bootstrap templates
 
 Runtime data (outside repo):
 ~/.tandem/profile/          User's technical profile (Grow)
