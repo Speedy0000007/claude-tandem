@@ -13,7 +13,8 @@ if [ "${1:-}" = "--worker" ]; then
   [ -z "$CWD" ] && exit 0
 
   PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}"
-  _TANDEM_SCRIPT="session-end" source "$PLUGIN_ROOT/lib/tandem.sh"
+  _TANDEM_SCRIPT="session-end"
+  source "$PLUGIN_ROOT/lib/tandem.sh"
 
   SANITISED=$(echo "$CWD" | sed 's|/|-|g')
   MEMORY_DIR="$HOME/.claude/projects/${SANITISED}/memory"

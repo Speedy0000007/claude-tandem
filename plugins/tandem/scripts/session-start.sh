@@ -59,6 +59,12 @@ if [ ! -f "$MARKER_FILE" ]; then
     PROVISIONED=1
   fi
 
+  if [ -f "$PLUGIN_ROOT/rules/tandem-debugging.md" ]; then
+    mkdir -p "$RULES_DIR"
+    cp "$PLUGIN_ROOT/rules/tandem-debugging.md" "$RULES_DIR/tandem-debugging.md"
+    PROVISIONED=1
+  fi
+
   if [ ! -d "$PROFILE_DIR" ]; then
     mkdir -p "$PROFILE_DIR"
     if [ -f "$PLUGIN_ROOT/templates/career-context.md" ]; then
@@ -222,23 +228,28 @@ if [ -f "$MEMORY_DIR/progress.md" ] && grep -q '## Pre-compaction State' "$MEMOR
   fi
 fi
 
-# --- Increment session stats ---
+# --- Increment session stats (only on startup, not resume/compact/clear) ---
 
+SOURCE=$(echo "$INPUT" | jq -r '.source // empty')
 STATS_FILE="$HOME/.tandem/state/stats.json"
 if [ -f "$STATS_FILE" ]; then
-  NEW_STATS=$(jq --arg today "$(date +%Y-%m-%d)" '
-    .total_sessions += 1 |
-    .last_session = $today
-  ' "$STATS_FILE")
+  if [ "$SOURCE" = "startup" ]; then
+    NEW_STATS=$(jq --arg today "$(date +%Y-%m-%d)" '
+      .total_sessions += 1 |
+      .last_session = $today
+    ' "$STATS_FILE")
 
-  TMPFILE=$(mktemp "$STATS_FILE.XXXXXX")
-  if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
-    echo "$NEW_STATS" > "$TMPFILE"
-    if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
-      mv "$TMPFILE" "$STATS_FILE"
-    else
-      rm -f "$TMPFILE"
+    TMPFILE=$(mktemp "$STATS_FILE.XXXXXX")
+    if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
+      echo "$NEW_STATS" > "$TMPFILE"
+      if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
+        mv "$TMPFILE" "$STATS_FILE"
+      else
+        rm -f "$TMPFILE"
+      fi
     fi
+  else
+    NEW_STATS=$(cat "$STATS_FILE")
   fi
 fi
 
