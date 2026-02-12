@@ -1,5 +1,11 @@
 .DS_Store
 *.swp
 .env
+
+# Build / scrape artifacts
+output/
 docs/
 examples/
+
+# Internal plans and notes
+.claude/plans/

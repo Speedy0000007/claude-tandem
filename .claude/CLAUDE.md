@@ -65,15 +65,17 @@ Runtime data (outside repo):
 
 ## Testing
 
-No test framework. Verify scripts manually:
-- `echo '{"prompt":"test"}' | ./scripts/detect-raw-input.sh` — should exit silently (too short)
-- `echo '{"cwd":"/tmp/test"}' | ./scripts/session-start.sh` — should provision if first run
-- `echo '{"cwd":"/tmp/test","task_subject":"Add auth"}' | ./scripts/task-completed.sh` — should output systemMessage if progress.md is stale
-- `echo '{"cwd":"/tmp/test","transcript_path":"/path/to/file.jsonl"}' | ./scripts/pre-compact.sh` — should call haiku and append to progress.md
-- `echo '{"tool_name":"Bash","tool_input":{"command":"git commit -m \"feat: add auth\""},"cwd":"/tmp/test"}' | ./scripts/validate-commit.sh` — should deny (missing body)
-- `echo '{"tool_name":"Bash","tool_input":{"command":"ls -la"},"cwd":"/tmp/test"}' | ./scripts/validate-commit.sh` — should exit silently (not a commit)
-- Check exit codes: all scripts should exit 0 regardless of outcome (validate-commit.sh exits 2 for denials)
+Uses [bats-core](https://github.com/bats-core/bats-core) with bats-support, bats-assert, and bats-file (git submodules in `test/lib/`).
 
-## Plan reference
+```bash
+make test              # run all tests (unit + integration)
+make test-unit         # unit tests only
+make test-integration  # integration tests only
+make lint              # shellcheck
+```
 
-Build spec and product docs: `docs/product/`
+- 204 tests: 187 unit + 17 integration across 13 test files
+- HOME isolation: every test runs in a temp HOME, no real `~/.tandem/` or `~/.claude/` touched
+- LLM mocking: mock `claude` CLI and `curl` on PATH, canned responses in `test/fixtures/`
+- Git mocking: real git repos in temp dirs for commit/squash/push tests
+- CI: GitHub Actions on ubuntu-latest + macos-latest (bash 3.2 compat)

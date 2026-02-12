@@ -21,6 +21,7 @@ claude "Let's work in Tandem"
   <img src="https://img.shields.io/badge/version-v1.2.1-green.svg" alt="Version: v1.2.1">
   <img src="https://img.shields.io/badge/platform-Claude%20Code-blueviolet.svg" alt="Platform: Claude Code">
   <img src="https://img.shields.io/badge/shell-bash-orange.svg" alt="Shell: bash">
+  <a href="https://github.com/jonny981/claude-tandem/actions/workflows/test.yml"><img src="https://github.com/jonny981/claude-tandem/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
 </p>
 
 ---
