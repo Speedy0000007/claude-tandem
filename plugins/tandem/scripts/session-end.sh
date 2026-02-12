@@ -116,6 +116,7 @@ Instructions:
 - Do NOT reference or modify other files in the memory/ directory
 - Output ONLY the new MEMORY.md content — no explanation, no code fences, no preamble
 - Always include a \`## Last Session\` section at the very end (before the THEMES line). This section is replaced every compaction, never accumulated. It should contain: what was being worked on, where it left off, what comes next. Write it so the next session can continue immediately. 2-5 lines max.
+- Maintain a \`## Active Plans\` section listing file paths to plan documents referenced in the progress notes. Carry forward plans from the existing MEMORY.md. Remove a plan only when the progress notes indicate it was implemented or abandoned. If no plans exist, omit the section entirely.
 - Also identify 1-3 recurring themes from this session as lowercase-hyphenated slugs. If a slug matches an existing theme, reuse it. Output the themes on their own line at the very end: \`THEMES: slug-1, slug-2\`
 
 PROMPT_EOF

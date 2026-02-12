@@ -9,6 +9,7 @@ Maintain progress.md in your auto-memory directory (alongside MEMORY.md) as a ru
 - After completing a task or subtask
 - After making a non-obvious decision or tradeoff
 - After hitting a significant issue or changing approach
+- When creating or working on a plan file, note its full path (e.g. "Plan: /path/to/plan-auth-redesign.md")
 
 **Format:** Brief append-only notes. Each entry: what was done + decision rationale + outcome. Don't rewrite earlier entries.
 

@@ -26,7 +26,7 @@ Claude Code already has auto-memory, MEMORY.md, context compaction, and a hook s
 - **TaskCompleted hook** — async, no LLM call. Just checks progress.md staleness (>5 min) and outputs a `systemMessage` nudge if stale.
 - **`TANDEM_AUTO_COMMIT`** — env var controlling session-end auto-commits. Default: enabled (1). Set to `0` to disable checkpoint commits. Only commits when there are actual staged changes (no empty commits).
 - **`TANDEM_WORKER` guard** — `claude -p` fires hooks during its lifecycle. All hook scripts exit early when `TANDEM_WORKER` is set in the environment (exported by the worker). This prevents recursive hook firing and inflated session counts. Heredocs in prompts must use unquoted delimiters (`<<EOF` not `<<'EOF'`) because `/bin/bash` 3.2 (macOS default) cannot parse apostrophes inside single-quoted heredocs in command substitutions.
-- **Rules files** — provisioned to `~/.claude/rules/tandem-*.md` by `session-start.sh`. Install = copy, uninstall = delete. Never patch user's CLAUDE.md. Includes `tandem-commits.md` for commit body enforcement.
+- **Rules files** — provisioned to `~/.claude/rules/tandem-*.md` by `session-start.sh`. Install = copy, uninstall = delete. Never patch user's CLAUDE.md. Includes `tandem-commits.md` for commit body enforcement. When editing source rules in `plugins/tandem/rules/`, also update the provisioned copy at `~/.claude/rules/` so changes take effect in the current session.
 - **Skill naming** — SKILL.md frontmatter uses short `name` (e.g., `clarify`), no prefix. The plugin system adds `tandem:` automatically.
 
 ## Build conventions
