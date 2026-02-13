@@ -56,7 +56,7 @@ LONG_PROMPT=$(printf 'x%.0s' {1..250})
   run_script_with_input "$SCRIPT" "$(fixture_userpromptsubmit "$LONG_PROMPT")"
   assert_success
   assert_output --partial '"hookSpecificOutput"'
-  assert_output --partial 'Questions to resolve'
+  assert_output --partial 'Before I start, I need to clarify'
 }
 
 # ─── Branding ─────────────────────────────────────────────────────────────────
@@ -99,7 +99,7 @@ LONG_PROMPT=$(printf 'x%.0s' {1..250})
   _install_mock_claude_fixture "clarify-clarify.txt"
   run_script_with_input "$SCRIPT" "$(fixture_userpromptsubmit "$LONG_PROMPT")"
   assert_success
-  assert_output --partial 'Intent (restructured from user input)'
+  assert_output --partial 'I understood your request as'
   assert_output --partial 'user authentication'
 }
 
@@ -154,7 +154,7 @@ EOF
   run_script_with_input "$SCRIPT" "$(fixture_userpromptsubmit "$LONG_PROMPT")"
   assert_success
   assert_output --partial '"hookSpecificOutput"'
-  assert_output --partial 'Questions to resolve'
+  assert_output --partial 'Before I start, I need to clarify'
   rm -f "$fixture_dir/clarify-lowercase.txt"
 }
 
@@ -347,7 +347,7 @@ EOF
   _install_mock_claude_fixture "clarify-clarify-skills.txt"
   run_script_with_input "$SCRIPT" "$(fixture_userpromptsubmit "$LONG_PROMPT")"
   assert_success
-  assert_output --partial 'Questions to resolve'
+  assert_output --partial 'Before I start, I need to clarify'
   assert_output --partial 'Relevant skills to consider loading: x-post, x-research'
   rm -f "$fixture_dir/clarify-clarify-skills.txt"
 }

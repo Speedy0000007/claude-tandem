@@ -117,29 +117,25 @@ if [ -n "$PLUGIN_VERSION" ]; then
   done
 fi
 
-# --- Provision UserPromptSubmit hook via stable symlink ---
-# Workaround: plugin hooks.json UserPromptSubmit entries are registered but never
-# execute due to a Claude Code bug. Provisioning into user settings.json works.
-# Idempotent: ln -sf updates target, settings.json only modified if entry missing.
-
-mkdir -p "$HOME/.tandem/bin"
-ln -sf "$PLUGIN_ROOT/scripts/detect-raw-input.sh" "$HOME/.tandem/bin/detect-raw-input.sh"
-
+# --- Clean up legacy settings.json hook provisioning ---
+# Previously provisioned UserPromptSubmit into settings.json as a workaround for a
+# Claude Code bug. This caused double-firing (hooks.json + settings.json) and cascade
+# storms. Now using hooks.json only. Remove legacy entry if present.
 SETTINGS_FILE="$HOME/.claude/settings.json"
 if [ -f "$SETTINGS_FILE" ]; then
   HAS_HOOK=$(jq '[.hooks.UserPromptSubmit // [] | .[].hooks[]? | select(.command | test("detect-raw-input"))] | length' "$SETTINGS_FILE" 2>/dev/null)
-  if [ "${HAS_HOOK:-0}" = "0" ]; then
+  if [ "${HAS_HOOK:-0}" != "0" ]; then
     TMPFILE=$(mktemp)
-    jq '.hooks.UserPromptSubmit = ((.hooks.UserPromptSubmit // []) + [{"hooks": [{"type": "command", "command": "$HOME/.tandem/bin/detect-raw-input.sh", "timeout": 15}]}])' "$SETTINGS_FILE" > "$TMPFILE"
+    jq '.hooks.UserPromptSubmit = [.hooks.UserPromptSubmit // [] | .[] | select(.hooks | all(.command | test("detect-raw-input") | not))]' "$SETTINGS_FILE" > "$TMPFILE"
     if [ $? -eq 0 ] && [ -s "$TMPFILE" ]; then
       mv "$TMPFILE" "$SETTINGS_FILE"
-      tandem_log info "provisioned UserPromptSubmit hook in settings.json"
+      tandem_log info "removed legacy detect-raw-input from settings.json"
     else
       rm -f "$TMPFILE"
-      tandem_log warn "failed to provision UserPromptSubmit hook"
     fi
   fi
 fi
+rm -f "$HOME/.tandem/bin/detect-raw-input.sh" 2>/dev/null
 
 # --- CLAUDE.md section injection ---
 

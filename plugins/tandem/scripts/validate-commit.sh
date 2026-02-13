@@ -2,6 +2,9 @@
 # PreToolUse hook: validates git commit messages for conventional format + body presence.
 # Fires on Bash tool calls. Exits 0 (allow) or 2 (deny with reason).
 
+# Skip if running inside a worker's claude -p call
+[ -n "${TANDEM_WORKER:-}" ] && exit 0
+
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}"
 source "$PLUGIN_ROOT/lib/tandem.sh"
 

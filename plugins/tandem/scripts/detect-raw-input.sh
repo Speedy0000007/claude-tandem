@@ -2,10 +2,15 @@
 # UserPromptSubmit hook: assess prompt quality, restructure or generate questions.
 # Stage 1: length gate (bash). Stage 2: assessment + action (haiku).
 
+# Skip if running inside a worker's claude -p call
+[ -n "${TANDEM_WORKER:-}" ] && exit 0
+
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}"
 source "$PLUGIN_ROOT/lib/tandem.sh"
 
 MIN_LENGTH=${TANDEM_CLARIFY_MIN_LENGTH:-200}
+MAX_LENGTH=${TANDEM_CLARIFY_MAX_LENGTH:-5000}
+DEBOUNCE_SECS=10
 
 tandem_require_jq
 
@@ -13,14 +18,40 @@ INPUT=$(cat)
 PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty' 2>/dev/null)
 
 # Stage 1: length gate
-[ -z "$PROMPT" ] && exit 0
+if [ -z "$PROMPT" ]; then
+  tandem_log debug "empty prompt, skipping"
+  exit 0
+fi
 LENGTH=${#PROMPT}
 if [ "$LENGTH" -lt "$MIN_LENGTH" ]; then
   tandem_log debug "prompt skipped (${LENGTH} chars)"
   exit 0
 fi
+# Reject full-context prompts (cascade prevention). Real user messages won't exceed MAX_LENGTH.
+if [ "$LENGTH" -gt "$MAX_LENGTH" ]; then
+  tandem_log debug "prompt too long, likely full context (${LENGTH} chars)"
+  exit 0
+fi
 
-tandem_require_llm || exit 0
+# Debounce: skip if we fired recently (prevents cascade from additionalContext re-triggering)
+DEBOUNCE_FILE="$HOME/.tandem/state/.clarify-last-fire"
+if [ -f "$DEBOUNCE_FILE" ]; then
+  LAST_FIRE=$(cat "$DEBOUNCE_FILE" 2>/dev/null)
+  NOW=$(date +%s)
+  if [ -n "$LAST_FIRE" ] && [ $((NOW - LAST_FIRE)) -lt "$DEBOUNCE_SECS" ]; then
+    tandem_log debug "debounced (${LENGTH} chars, last fire ${LAST_FIRE})"
+    exit 0
+  fi
+fi
+mkdir -p "$HOME/.tandem/state" 2>/dev/null
+date +%s > "$DEBOUNCE_FILE"
+
+if ! tandem_require_llm; then
+  tandem_log warn "LLM unavailable, skipping clarify"
+  exit 0
+fi
+
+tandem_log debug "hook fired (${LENGTH} chars)"
 
 # Skill discovery: build list for LLM awareness
 SKILL_LIST=""
@@ -84,7 +115,10 @@ ${SKILL_LIST}"
 fi
 
 RESULT=$(tandem_llm_call "$HAIKU_PROMPT")
-[ -z "$RESULT" ] && exit 0
+if [ -z "$RESULT" ]; then
+  tandem_log warn "empty LLM response"
+  exit 0
+fi
 
 # Trim whitespace for comparison
 TRIMMED=$(echo "$RESULT" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
@@ -174,13 +208,16 @@ ${QUESTIONS}
 Wait for answers before beginning any work."
   else
     CONTEXT="◎╵═╵◎ ~ Clarify.
-Display the following to the user and wait for answers before beginning any work.
 
-Intent (restructured from user input):
+IMPORTANT: You MUST display this to the user before doing anything else. Do not skip this, do not start working. Display it and wait for answers.
+
+I understood your request as:
 ${INTENT}
 
-Questions to resolve:
-${QUESTIONS}"
+Before I start, I need to clarify:
+${QUESTIONS}
+
+Wait for the user to answer before beginning any work."
   fi
 else
   tandem_log info "prompt restructured (${LENGTH} chars)"
@@ -193,11 +230,10 @@ ${RESULT}
 ---"
   else
     CONTEXT="◎╵═╵◎ ~ Clarified.
-The following is a restructured version of the user's input. Display it to the user (prefixed with '◎╵═╵◎ ~ Clarified.'), then execute using it as your primary instruction.
 
----
-${RESULT}
----"
+IMPORTANT: Display this restructured version to the user before executing. Show it prefixed with the logo line above.
+
+${RESULT}"
   fi
 fi
 
