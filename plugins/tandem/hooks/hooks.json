@@ -23,7 +23,7 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/detect-raw-input.sh",
-            "timeout": 15
+            "timeout": 30
           }
         ]
       }

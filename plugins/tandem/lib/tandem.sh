@@ -55,17 +55,18 @@ tandem_print() {
 }
 
 tandem_header() {
-  local version stats sessions compactions updates
+  local version stats sessions clarifications compactions updates
   version=$(jq -r '.version // "?"' "$PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null || echo "?")
   if [ -f "$HOME/.tandem/state/stats.json" ]; then
     stats=$(cat "$HOME/.tandem/state/stats.json")
     sessions=$(echo "$stats" | jq -r '.total_sessions // 0')
+    clarifications=$(echo "$stats" | jq -r '.clarifications // 0')
     compactions=$(echo "$stats" | jq -r '.compactions // 0')
     updates=$(echo "$stats" | jq -r '.profile_updates // 0')
   else
-    sessions=0 compactions=0 updates=0
+    sessions=0 clarifications=0 compactions=0 updates=0
   fi
-  echo "${_TANDEM_LOGO} ~ Tandem v${version} · ▷ ${sessions} · ↻ ${compactions} · ◆ ${updates}"
+  echo "${_TANDEM_LOGO} ~ Tandem v${version} · ▷ ${sessions} · ✎ ${clarifications} · ↻ ${compactions} · ◆ ${updates}"
 }
 
 # ─── Cross-platform helpers ───────────────────────────────────────────────────

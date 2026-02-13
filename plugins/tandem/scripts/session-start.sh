@@ -89,6 +89,7 @@ if [ ! -f "$HOME/.tandem/state/stats.json" ]; then
     total_sessions: 0,
     first_session: (now | strftime("%Y-%m-%d")),
     last_session: (now | strftime("%Y-%m-%d")),
+    clarifications: 0,
     compactions: 0,
     profile_updates: 0,
     milestones_hit: [],

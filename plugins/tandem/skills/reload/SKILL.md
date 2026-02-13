@@ -8,12 +8,11 @@ Sync the local Tandem source directory into Claude Code's plugin cache so that s
 
 ## Steps
 
-1. Read `~/.claude/plugins/known_marketplaces.json` to find the `tandem-marketplace` entry and its `path` (the source directory).
-2. Read `~/.claude/plugins/installed_plugins.json` to find the cache `install_path` for the tandem plugin.
-3. Check if the cache path is already a symlink pointing to the correct source plugin directory (`<marketplace_path>/plugins/tandem`).
-   - If yes: report "Already synced. Cache is a symlink to source."
-   - If no: run `rm -rf <cache_path> && ln -s <source_plugin_dir> <cache_path>` (confirm with user first).
-4. Report what changed.
+1. Read `~/.claude/plugins/known_marketplaces.json` to find the `tandem-marketplace` entry. The source directory is at `source.path` (or `installLocation`).
+2. Read `~/.claude/plugins/installed_plugins.json` to find the `tandem@tandem-marketplace` entry and its `installPath` (the cache path).
+3. Run `readlink <cache_path>` to check if it's already a symlink.
+   - If it resolves to `<source_dir>/plugins/tandem`: report "Already synced. Cache is a symlink to source."
+   - Otherwise: run `rm -rf <cache_path> && ln -s <source_dir>/plugins/tandem <cache_path>` and report what changed. No confirmation needed, this is a safe, reversible operation.
 
 **Note:** Script, skill, and rule changes are live immediately after sync. Changes to `hooks/hooks.json` require a session restart (hooks are snapshotted at startup).
 

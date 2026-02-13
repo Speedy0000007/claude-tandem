@@ -94,11 +94,13 @@ create_stats() {
   local sessions="${1:-0}"
   local compactions="${2:-0}"
   local updates="${3:-0}"
+  local clarifications="${4:-0}"
   cat > "$HOME/.tandem/state/stats.json" <<STATS_EOF
 {
   "total_sessions": $sessions,
   "first_session": "2025-01-01",
   "last_session": "2025-01-01",
+  "clarifications": $clarifications,
   "compactions": $compactions,
   "profile_updates": $updates,
   "milestones_hit": [],

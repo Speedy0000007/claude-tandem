@@ -146,9 +146,10 @@ fi
 
 if [ -f "$STATS_FILE" ]; then
   TOTAL=$(jq -r '.total_sessions' "$STATS_FILE" 2>/dev/null)
+  CLARIFICATIONS=$(jq -r '.clarifications // 0' "$STATS_FILE" 2>/dev/null)
   COMPACTIONS=$(jq -r '.compactions' "$STATS_FILE" 2>/dev/null)
   UPDATES=$(jq -r '.profile_updates' "$STATS_FILE" 2>/dev/null)
-  echo "Stats: ${TOTAL} sessions, ${COMPACTIONS} compactions, ${UPDATES} profile updates"
+  echo "Stats: ${TOTAL} sessions, ${CLARIFICATIONS} clarifications, ${COMPACTIONS} compactions, ${UPDATES} profile updates"
 fi
 
 # --- Log info ---

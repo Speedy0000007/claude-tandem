@@ -76,7 +76,7 @@ make test-integration  # integration tests only
 make lint              # shellcheck
 ```
 
-- 225 tests: 208 unit + 17 integration across 14 test files
+- 250 tests: 233 unit + 17 integration across 14 test files
 - HOME isolation: every test runs in a temp HOME, no real `~/.tandem/` or `~/.claude/` touched
 - LLM mocking: mock `claude` CLI and `curl` on PATH, canned responses in `test/fixtures/`
 - Git mocking: real git repos in temp dirs for commit/squash/push tests

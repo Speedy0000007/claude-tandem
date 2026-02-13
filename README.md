@@ -112,9 +112,9 @@ If Claude Code ships a native version of something Tandem does, Tandem should ge
 
 Garbage in, garbage out. Clarify fixes the input.
 
-A UserPromptSubmit hook detects long, unstructured input (dictation, brain dumps, walls of text) and sends it to a lightweight LLM for assessment. Three outcomes: **SKIP** (already clear), **RESTRUCTURE** (rewritten for clarity), or **CLARIFY** (ambiguity detected, questions generated before work begins).
+A UserPromptSubmit hook detects long, unstructured input (dictation, brain dumps, walls of text) and sends it to a lightweight LLM for assessment. Three outcomes: **SKIP** (already clear), **RESTRUCTURE** (rewritten for clarity), or **CLARIFY** (ambiguity detected, questions generated before work begins). The assessment also discovers relevant skills from your installed skill directories and suggests them alongside the outcome.
 
-**What you see:** Your messy input executes cleanly. A `Clarified.` indicator appears when restructuring happened. If questions are needed, they appear before any work starts.
+**What you see:** Your messy input executes cleanly. A `Clarified.` indicator appears when restructuring happened. If questions are needed, they appear before any work starts. Relevant skills are suggested when applicable.
 
 **Configurable:**
 - `TANDEM_CLARIFY_MIN_LENGTH` — minimum characters before assessment triggers (default: 200)
