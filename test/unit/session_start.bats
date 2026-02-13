@@ -43,13 +43,13 @@ run_session_start() {
   [ -f "$HOME/.claude/rules/tandem-commits.md" ]
 }
 
-@test "first run: creates profile directory with career-context.md template" {
+@test "first run: creates profile directory with USER.md template" {
   rm -f "$HOME/.tandem/.provisioned"
   rm -rf "$HOME/.tandem/profile"
   run_session_start
   assert_success
   [ -d "$HOME/.tandem/profile" ]
-  [ -f "$HOME/.tandem/profile/career-context.md" ]
+  [ -f "$HOME/.tandem/profile/USER.md" ]
 }
 
 @test "first run: creates .provisioned marker" {

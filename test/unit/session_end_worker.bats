@@ -19,7 +19,7 @@ run_worker() {
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -32,7 +32,7 @@ run_worker() {
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -43,7 +43,7 @@ run_worker() {
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -60,7 +60,7 @@ run_worker() {
   git -C "$TEST_CWD" add -u
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -77,7 +77,7 @@ run_worker() {
   git -C "$TEST_CWD" add -u
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -93,7 +93,7 @@ run_worker() {
   git -C "$TEST_CWD" add -u
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -110,7 +110,7 @@ run_worker() {
   git -C "$TEST_CWD" add -u
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   local before_hash
   before_hash=$(git -C "$TEST_CWD" rev-parse HEAD)
@@ -128,7 +128,7 @@ run_worker() {
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -141,7 +141,7 @@ run_worker() {
   # Don't modify any files -- nothing to stage
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   local before_hash
   before_hash=$(git -C "$TEST_CWD" rev-parse HEAD)
@@ -160,7 +160,7 @@ run_worker() {
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -172,7 +172,7 @@ run_worker() {
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -189,7 +189,7 @@ run_worker() {
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -209,7 +209,7 @@ run_worker() {
   create_memory "current memory"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -229,7 +229,7 @@ run_worker() {
 STDIN=$(cat)
 if echo "$STDIN" | grep -q 'compaction'; then
   printf '```markdown\n# Project Memory\n\n## Architecture\n- Express API\n- PostgreSQL\n\n## Patterns\n- REST conventions\n- Zod validation\n\n## Last Session\nWorking on tests.\n```'
-elif echo "$STDIN" | grep -q 'extraction'; then
+elif echo "$STDIN" | grep -q 'USER.md'; then
   printf 'NONE'
 fi
 MOCK_EOF
@@ -249,7 +249,7 @@ MOCK_EOF
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-refusal.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -263,7 +263,7 @@ MOCK_EOF
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-short.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -284,7 +284,7 @@ STDIN=$(cat)
 if echo "$STDIN" | grep -q 'compaction'; then
   # Return empty
   true
-elif echo "$STDIN" | grep -q 'extraction'; then
+elif echo "$STDIN" | grep -q 'USER.md'; then
   printf 'NONE'
 fi
 MOCK_EOF
@@ -302,7 +302,7 @@ MOCK_EOF
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -315,7 +315,7 @@ MOCK_EOF
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -330,7 +330,7 @@ MOCK_EOF
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -343,7 +343,7 @@ MOCK_EOF
   create_stats 5 2 1
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -358,7 +358,7 @@ MOCK_EOF
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   # Ensure profile dir is empty
   rm -rf "$HOME/.tandem/profile"
@@ -367,49 +367,47 @@ MOCK_EOF
   run_worker
 
   assert_success
-  local file_count
-  file_count=$(ls "$HOME/.tandem/profile"/*.md 2>/dev/null | wc -l | tr -d ' ')
-  [ "$file_count" -eq 0 ]
+  [ ! -f "$HOME/.tandem/profile/USER.md" ]
 }
 
-@test "phase 2: FILE block appended to profile file" {
+@test "phase 2: profile written to USER.md" {
   create_progress "learned about bats testing"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-append.txt"
+    "USER.md" "grow-extract-profile.txt"
 
   run_worker
 
   assert_success
-  [ -f "$HOME/.tandem/profile/testing-patterns.md" ]
-  run cat "$HOME/.tandem/profile/testing-patterns.md"
-  assert_output --partial "Bats Testing"
+  [ -f "$HOME/.tandem/profile/USER.md" ]
+  run cat "$HOME/.tandem/profile/USER.md"
+  assert_output --partial "# User Profile"
+  assert_output --partial "Bats testing framework"
 }
 
-@test "phase 2: REPLACE mode for career-context.md replaces file" {
-  # Create existing career-context.md with old content
+@test "phase 2: existing USER.md replaced with updated content" {
   mkdir -p "$HOME/.tandem/profile"
-  echo "old career info" > "$HOME/.tandem/profile/career-context.md"
+  echo "# User Profile
+## Career Context
+Old info" > "$HOME/.tandem/profile/USER.md"
   create_progress "user mentioned their role"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-replace.txt"
+    "USER.md" "grow-extract-profile.txt"
 
   run_worker
 
   assert_success
-  run cat "$HOME/.tandem/profile/career-context.md"
-  # Should contain new content
+  run cat "$HOME/.tandem/profile/USER.md"
   assert_output --partial "Senior Software Engineer"
-  # Should NOT contain old content
-  refute_output --partial "old career info"
+  refute_output --partial "Old info"
 }
 
 @test "phase 2: NUDGE line writes nudge file" {
   create_progress "worked with bash 3.2"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-nudge.txt"
+    "USER.md" "grow-extract-nudge-profile.txt"
 
   run_worker
 
@@ -417,11 +415,27 @@ MOCK_EOF
   [ -f "$HOME/.tandem/next-nudge" ]
   run cat "$HOME/.tandem/next-nudge"
   assert_output --partial "shellcheck"
+  # NUDGE line should not appear in USER.md
+  run cat "$HOME/.tandem/profile/USER.md"
+  refute_output --partial "NUDGE:"
 }
 
-@test "phase 2: multiple FILE blocks all processed" {
+@test "phase 2: profile stats updated (profile_updates incremented)" {
+  create_progress "learned new patterns"
+  create_stats 5 2 3
+  _install_mock_claude_dispatch \
+    "compaction" "recall-compact-good.txt" \
+    "USER.md" "grow-extract-profile.txt"
+
+  run_worker
+
+  assert_success
+  run jq '.profile_updates' "$HOME/.tandem/state/stats.json"
+  assert_output "4"
+}
+
+@test "phase 2: code fences stripped from profile response" {
   create_progress "session notes"
-  # Mock that returns two FILE blocks
   local mock_dir="$TEST_TEMP_DIR/mock_bin"
   mkdir -p "$mock_dir"
   cat > "$mock_dir/claude" <<'MOCK_EOF'
@@ -443,16 +457,17 @@ Working on tests.
 
 THEMES: testing
 RECALL
-elif echo "$STDIN" | grep -q 'extraction'; then
+elif echo "$STDIN" | grep -q 'USER.md'; then
   cat <<'GROW'
-FILE: testing-patterns.md
-## Unit Testing
-- Always isolate HOME
----
-FILE: shell-scripting.md
-## Bash Tips
-- Use shellcheck
----
+```markdown
+# User Profile
+
+## Career Context
+Developer.
+
+## Technical Understanding
+- Testing patterns
+```
 GROW
 fi
 MOCK_EOF
@@ -462,27 +477,14 @@ MOCK_EOF
   run_worker
 
   assert_success
-  [ -f "$HOME/.tandem/profile/testing-patterns.md" ]
-  [ -f "$HOME/.tandem/profile/shell-scripting.md" ]
+  [ -f "$HOME/.tandem/profile/USER.md" ]
+  run cat "$HOME/.tandem/profile/USER.md"
+  refute_output --partial '```'
+  assert_output --partial "# User Profile"
 }
 
-@test "phase 2: profile stats updated (profile_updates incremented)" {
-  create_progress "learned new patterns"
-  create_stats 5 2 3
-  _install_mock_claude_dispatch \
-    "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-append.txt"
-
-  run_worker
-
-  assert_success
-  run jq '.profile_updates' "$HOME/.tandem/state/stats.json"
-  assert_output "4"
-}
-
-@test "phase 2: empty LLM response does not crash" {
+@test "phase 2: invalid response (no heading) is skipped gracefully" {
   create_progress "session notes"
-  # Mock where extraction returns empty
   local mock_dir="$TEST_TEMP_DIR/mock_bin"
   mkdir -p "$mock_dir"
   cat > "$mock_dir/claude" <<'MOCK_EOF'
@@ -503,7 +505,42 @@ Tests.
 
 THEMES: testing
 RECALL
-elif echo "$STDIN" | grep -q 'extraction'; then
+elif echo "$STDIN" | grep -q 'USER.md'; then
+  printf 'Some random text without a heading\nAnother line'
+fi
+MOCK_EOF
+  chmod +x "$mock_dir/claude"
+  export PATH="$mock_dir:$ORIGINAL_PATH"
+
+  run_worker
+
+  assert_success
+  [ ! -f "$HOME/.tandem/profile/USER.md" ]
+}
+
+@test "phase 2: empty LLM response does not crash" {
+  create_progress "session notes"
+  local mock_dir="$TEST_TEMP_DIR/mock_bin"
+  mkdir -p "$mock_dir"
+  cat > "$mock_dir/claude" <<'MOCK_EOF'
+#!/bin/bash
+STDIN=$(cat)
+if echo "$STDIN" | grep -q 'compaction'; then
+  cat <<'RECALL'
+# Project Memory
+
+## Architecture
+- Express API
+
+## Patterns
+- REST
+
+## Last Session
+Tests.
+
+THEMES: testing
+RECALL
+elif echo "$STDIN" | grep -q 'USER.md'; then
   # Return empty
   true
 fi
@@ -522,7 +559,7 @@ MOCK_EOF
   create_progress "built the auth module"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -546,7 +583,7 @@ Entry number ${i}
 
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -561,7 +598,7 @@ Entry number ${i}
   rm -f "$HOME/.tandem/memory/global.md"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -575,7 +612,7 @@ Entry number ${i}
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -587,7 +624,7 @@ Entry number ${i}
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-refusal.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -620,7 +657,7 @@ Working on tests.
 
 THEMES: testing
 RECALL
-elif echo "$STDIN" | grep -q 'extraction'; then
+elif echo "$STDIN" | grep -q 'USER.md'; then
   # Return empty to trigger failure
   true
 fi
@@ -640,7 +677,7 @@ MOCK_EOF
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -657,7 +694,7 @@ MOCK_EOF
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -671,12 +708,12 @@ MOCK_EOF
   create_progress "learned testing patterns"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
-    "extraction" "grow-extract-append.txt"
+    "USER.md" "grow-extract-profile.txt"
 
   run_worker
 
   assert_success
   run cat "$HOME/.tandem/.last-session-recap"
   assert_output --partial "grow_status: 1"
-  assert_output --partial "profile_files:"
+  assert_output --partial "profile_files: USER.md"
 }

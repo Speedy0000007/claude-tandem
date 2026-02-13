@@ -67,8 +67,8 @@ if [ ! -f "$MARKER_FILE" ]; then
 
   if [ ! -d "$PROFILE_DIR" ]; then
     mkdir -p "$PROFILE_DIR"
-    if [ -f "$PLUGIN_ROOT/templates/career-context.md" ]; then
-      cp "$PLUGIN_ROOT/templates/career-context.md" "$PROFILE_DIR/career-context.md"
+    if [ -f "$PLUGIN_ROOT/templates/USER.md" ]; then
+      cp "$PLUGIN_ROOT/templates/USER.md" "$PROFILE_DIR/USER.md"
     fi
     PROVISIONED=1
   fi

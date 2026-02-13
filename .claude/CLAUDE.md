@@ -59,7 +59,7 @@ plugins/tandem/
   templates/          Profile bootstrap templates
 
 Runtime data (outside repo):
-~/.tandem/profile/          User's technical profile (Grow)
+~/.tandem/profile/USER.md   User's technical profile (Grow)
 ~/.tandem/state/            Recurrence themes, state files
 ~/.tandem/logs/tandem.log   Unified log file (silent, never stderr)
 ~/.tandem/memory/global.md  Cross-project activity log (30 entries max)
@@ -76,7 +76,7 @@ make test-integration  # integration tests only
 make lint              # shellcheck
 ```
 
-- 250 tests: 233 unit + 17 integration across 14 test files
+- 251 tests: 234 unit + 17 integration across 14 test files
 - HOME isolation: every test runs in a temp HOME, no real `~/.tandem/` or `~/.claude/` touched
 - LLM mocking: mock `claude` CLI and `curl` on PATH, canned responses in `test/fixtures/`
 - Git mocking: real git repos in temp dirs for commit/squash/push tests

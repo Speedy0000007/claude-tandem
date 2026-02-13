@@ -59,7 +59,7 @@ Working on tests.
 
 THEMES: testing
 RECALL
-elif echo "$STDIN" | grep -q 'extraction'; then
+elif echo "$STDIN" | grep -q 'USER.md'; then
   printf 'NONE'
 fi
 MOCK_EOF
@@ -99,7 +99,7 @@ Tests.
 
 THEMES: testing
 RECALL
-elif echo "$STDIN" | grep -q 'extraction'; then
+elif echo "$STDIN" | grep -q 'USER.md'; then
   printf 'NONE'
 fi
 MOCK_EOF
@@ -119,7 +119,7 @@ MOCK_EOF
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-priority.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -134,7 +134,7 @@ MOCK_EOF
   create_progress "session notes"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-priority.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -380,7 +380,7 @@ Tests.
 
 THEMES: testing
 RECALL
-elif echo "$STDIN" | grep -q 'extraction'; then
+elif echo "$STDIN" | grep -q 'USER.md'; then
   printf 'NONE'
 fi
 MOCK_EOF
@@ -431,7 +431,7 @@ Tests.
 
 THEMES: testing, error-handling
 RECALL
-elif echo "$STDIN" | grep -q 'extraction'; then
+elif echo "$STDIN" | grep -q 'USER.md'; then
   printf 'NONE'
 fi
 MOCK_EOF
@@ -480,7 +480,7 @@ Tests.
 
 THEMES: testing
 RECALL
-elif echo "$STDIN" | grep -q 'extraction'; then
+elif echo "$STDIN" | grep -q 'USER.md'; then
   printf 'NONE'
 fi
 MOCK_EOF
@@ -510,7 +510,7 @@ EOF
 
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-priority.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 
@@ -534,7 +534,7 @@ EOF
 
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-priority.txt" \
-    "extraction" "grow-extract-none.txt"
+    "USER.md" "grow-extract-none.txt"
 
   run_worker
 

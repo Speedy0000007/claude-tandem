@@ -156,17 +156,16 @@ The result: `git log` becomes a complete, queryable history of every AI session.
 
 The user gets smarter. Learns as they go.
 
-- **Natural concept mentions** — Claude weaves technical concepts into responses as a senior colleague would
-- **Pattern cards** — concepts are captured during sessions and formalised into searchable cards in `~/.tandem/profile/`
-- **Gap analysis** — `/tandem:grow gaps` cross-references your pattern cards against friction data from `/insights` and your career goals to identify what would make the biggest difference to learn next
+- **Natural concept mentions** — Claude weaves technical concepts into responses as a senior colleague would, naming concepts and explaining why they matter for your work
+- **Single profile file** — a lightweight `USER.md` tracks your career context, technical understanding, and growth edges. Updated automatically at session end when the session reveals something about your understanding level
+- **Learning nudges** — when a genuine growth edge is detected, a NUDGE appears at the start of your next session with a friendly one-sentence observation
+- **Gap analysis** — `/tandem:grow gaps` cross-references your profile against friction data and career goals to identify what would make the biggest difference to learn next
 
 **Commands:**
-- `/tandem:grow` — summary of all pattern cards
-- `/tandem:grow search [topic]` — find cards by topic
-- `/tandem:grow prep [topic]` — prepare for technical discussions
+- `/tandem:grow` — view your profile
 - `/tandem:grow gaps` — identify high-impact learning priorities
 
-**Profile directory:** `~/.tandem/profile/` (override with `TANDEM_PROFILE_DIR`)
+**Profile:** `~/.tandem/profile/USER.md` (override directory with `TANDEM_PROFILE_DIR`)
 
 ---
 
@@ -223,7 +222,7 @@ Typical session cost: **$0.03-0.08**. With a local LLM backend: **$0**.
 Tandem creates zero files in your repositories. Everything lives in:
 - `~/.claude/rules/tandem-*.md` — behavioural rules including commit body enforcement (install = copy, uninstall = delete)
 - `~/.claude/projects/{project}/memory/progress.md` — session bridge with structured Working State + Session Log (alongside native MEMORY.md)
-- `~/.tandem/profile/` — learning profile
+- `~/.tandem/profile/USER.md` — learning profile
 - `~/.tandem/memory/global.md` — cross-project activity log (30 entries max)
 
 ---
@@ -274,7 +273,7 @@ This removes the plugin (skills, hooks, scripts). Your data is preserved.
 
 3. **Remove data directories:**
    ```bash
-   # Profile and pattern cards
+   # User profile
    rm -rf ~/.tandem/profile/
 
    # State files and recurrence data

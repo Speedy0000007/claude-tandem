@@ -342,25 +342,10 @@ grow_extract() {
 
   PROGRESS_CONTENT=$(cat "$MEMORY_DIR/progress.md")
 
-  # Read career context if available
-  CAREER_CONTEXT=""
-  if [ -f "$PROFILE_DIR/career-context.md" ]; then
-    CAREER_CONTEXT=$(cat "$PROFILE_DIR/career-context.md")
-  fi
-
-  # Read current profile files
-  PROFILE_CONTENTS=""
-  if [ -d "$PROFILE_DIR" ]; then
-    for f in "$PROFILE_DIR"/*.md; do
-      [ -f "$f" ] || continue
-      FNAME=$(basename "$f")
-      FCONTENT=$(cat "$f")
-      PROFILE_CONTENTS="${PROFILE_CONTENTS}--- ${FNAME} ---
-${FCONTENT}
---- end ---
-
-"
-    done
+  # Read current profile
+  CURRENT_PROFILE=""
+  if [ -f "$PROFILE_DIR/USER.md" ]; then
+    CURRENT_PROFILE=$(cat "$PROFILE_DIR/USER.md")
   fi
 
   # Read recurrence themes
@@ -371,30 +356,20 @@ ${FCONTENT}
 
   # Build the extraction prompt
   PROMPT=$(cat <<PROMPT_EOF
-You are a learning extraction agent. Review the session progress and identify what the user learned, practiced, or deepened understanding of.
+You maintain USER.md, a lightweight profile of this user's technical understanding.
+It helps a mentoring system know what the user already understands (so it does not repeat itself) and where growth edges exist (for targeted nudges).
 
-If there are learnings worth persisting, output changes to their profile directory. No rigid format — organise however best serves this user. Consider their career context if provided.
+This is not a knowledge base. It is a concise signal about the user's learning trajectory. Keep it under 80 lines.
 
 Rules:
-- Only persist genuinely valuable learnings (skip routine operations)
-- Do not duplicate what is already in the profile
-- Keep entries concise and actionable
-- Pay special attention to recurring themes (provided below) — if a theme keeps appearing but the profile has thin coverage, that is a high-priority learning to capture
-- If you identify a high-impact learning opportunity, prioritise gaps: recurring themes where the profile has thin or no coverage. A theme appearing in 5+ sessions with no profile entry is a stronger NUDGE candidate than a novel concept from a single session. Output: NUDGE: [one sentence]
-- If the session notes mention the user role, company, tech stack, goals, strengths, or career direction, update career-context.md accordingly. Merge new information with existing content — never overwrite what is already there, only enrich. For career-context.md, output the full updated file (not append).
+- Only update when the session reveals something about understanding level, not when a task was merely completed
+- Do not add project-specific details, debugging notes, or implementation mechanics
+- Merge new observations with existing content. Preserve what is already there unless it is clearly outdated
+- If the session reveals career context (role, stack, goals), update the Career Context section
+- Pay special attention to recurring themes (provided below) -- if a theme keeps appearing but the profile has thin coverage, that is a high-priority area to capture
+- If you spot a genuine learning gap worth highlighting, output a NUDGE line before the profile: NUDGE: [friendly one-sentence observation]
 
-Output format for each file:
-FILE: [filename]
-[content to append]
----
-
-For career-context.md specifically (full replacement, not append):
-FILE: career-context.md
-REPLACE: true
-[full updated content]
----
-
-Or if nothing worth persisting: NONE
+Output the full updated USER.md content below. Or if nothing changed: NONE
 
 PROMPT_EOF
   )
@@ -405,19 +380,15 @@ PROMPT_EOF
 ${PROGRESS_CONTENT}
 </session_progress>
 
-<current_profile_files>
-${PROFILE_CONTENTS}
-</current_profile_files>
-
-<career_context>
-${CAREER_CONTEXT}
-</career_context>
+<current_profile>
+${CURRENT_PROFILE}
+</current_profile>
 
 <recurrence_themes>
 ${RECURRENCE_THEMES}
 </recurrence_themes>
 
-Review the session and extract learnings now."
+Review the session and update the profile now."
 
   tandem_log info "extracting learnings"
 
@@ -437,118 +408,35 @@ Review the session and extract learnings now."
   # Ensure profile directory exists
   mkdir -p "$PROFILE_DIR"
 
-  # Parse the result: handle FILE blocks, REPLACE flag, and NUDGE
-  CURRENT_FILE=""
-  CURRENT_CONTENT=""
-  REPLACE_MODE=false
-  NUDGE=""
-  UPDATED_FILES=""
+  # Extract NUDGE if present
+  NUDGE=$(echo "$RESULT" | sed -n 's/^NUDGE: *//p' | head -1)
+  CONTENT=$(echo "$RESULT" | sed '/^NUDGE: /d')
 
-  while IFS= read -r line; do
-    # Check for nudge
-    if [[ "$line" == NUDGE:* ]]; then
-      NUDGE="${line#NUDGE: }"
-      continue
-    fi
+  # Strip code fences
+  CONTENT=$(echo "$CONTENT" | sed '/^```/d')
 
-    # Check for file header
-    if [[ "$line" == FILE:* ]]; then
-      # Write previous file's content
-      if [ -n "$CURRENT_FILE" ] && [ -n "$CURRENT_CONTENT" ]; then
-        SLUG=$(echo "$CURRENT_FILE" | xargs)
-        SLUG="${SLUG%.md}"
-        TARGET="$PROFILE_DIR/${SLUG}.md"
-        if [ "$REPLACE_MODE" = true ]; then
-          TMPFILE=$(mktemp "$PROFILE_DIR/${SLUG}.md.XXXXXX")
-          if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
-            if echo "$CURRENT_CONTENT" > "$TMPFILE" && [ -s "$TMPFILE" ]; then
-              mv "$TMPFILE" "$TARGET"
-              UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
-            else
-              tandem_log warn "failed to write ${SLUG}.md"
-              rm -f "$TMPFILE"
-            fi
-          fi
-        else
-          echo "$CURRENT_CONTENT" >> "$TARGET"
-          UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
-        fi
-      fi
-      CURRENT_FILE="${line#FILE: }"
-      CURRENT_CONTENT=""
-      REPLACE_MODE=false
-      continue
-    fi
-
-    # Check for replace flag (must follow immediately after FILE: line)
-    if [[ "$line" == "REPLACE: true" ]] && [ -z "$CURRENT_CONTENT" ]; then
-      REPLACE_MODE=true
-      continue
-    fi
-
-    # Check for block separator
-    if [[ "$line" == "---" ]] && [ -n "$CURRENT_FILE" ]; then
-      # Write current file's content
-      if [ -n "$CURRENT_CONTENT" ]; then
-        SLUG=$(echo "$CURRENT_FILE" | xargs)
-        SLUG="${SLUG%.md}"
-        TARGET="$PROFILE_DIR/${SLUG}.md"
-        if [ "$REPLACE_MODE" = true ]; then
-          TMPFILE=$(mktemp "$PROFILE_DIR/${SLUG}.md.XXXXXX")
-          if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
-            if echo "$CURRENT_CONTENT" > "$TMPFILE" && [ -s "$TMPFILE" ]; then
-              mv "$TMPFILE" "$TARGET"
-              UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
-            else
-              tandem_log warn "failed to write ${SLUG}.md"
-              rm -f "$TMPFILE"
-            fi
-          fi
-        else
-          echo "$CURRENT_CONTENT" >> "$TARGET"
-          UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
-        fi
-      fi
-      CURRENT_FILE=""
-      CURRENT_CONTENT=""
-      REPLACE_MODE=false
-      continue
-    fi
-
-    # Accumulate content
-    if [ -n "$CURRENT_FILE" ]; then
-      CURRENT_CONTENT="${CURRENT_CONTENT}${line}
-"
-    fi
-  done <<< "$RESULT"
-
-  # Write final file's content if no trailing ---
-  if [ -n "$CURRENT_FILE" ] && [ -n "$CURRENT_CONTENT" ]; then
-    SLUG=$(echo "$CURRENT_FILE" | xargs)
-    SLUG="${SLUG%.md}"
-    TARGET="$PROFILE_DIR/${SLUG}.md"
-    if [ "$REPLACE_MODE" = true ]; then
-      TMPFILE=$(mktemp "$PROFILE_DIR/${SLUG}.md.XXXXXX")
-      if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
-        if echo "$CURRENT_CONTENT" > "$TMPFILE" && [ -s "$TMPFILE" ]; then
-          mv "$TMPFILE" "$TARGET"
-          UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
-        else
-          tandem_log warn "failed to write ${SLUG}.md"
-          rm -f "$TMPFILE"
-        fi
-      fi
-    else
-      echo "$CURRENT_CONTENT" >> "$TARGET"
-      UPDATED_FILES="${UPDATED_FILES}${SLUG}.md, "
-    fi
+  # Validate: must contain a heading
+  if ! echo "$CONTENT" | grep -q "^# "; then
+    tandem_log warn "extraction returned unexpected format, skipping"
+    return 0
   fi
 
-  # Clean up trailing comma
-  UPDATED_FILES="${UPDATED_FILES%, }"
+  # Atomic write
+  TARGET="$PROFILE_DIR/USER.md"
+  TMPFILE=$(mktemp "$PROFILE_DIR/USER.md.XXXXXX")
+  if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
+    tandem_log warn "failed to create temp file for USER.md"
+    return 0
+  fi
 
-  if [ -n "$UPDATED_FILES" ]; then
-    tandem_log info "profile updated: ${UPDATED_FILES}"
+  if echo "$CONTENT" > "$TMPFILE" && [ -s "$TMPFILE" ]; then
+    mv "$TMPFILE" "$TARGET"
+    UPDATED_FILES="USER.md"
+    tandem_log info "profile updated: USER.md"
+  else
+    tandem_log warn "failed to write USER.md"
+    rm -f "$TMPFILE"
+    return 0
   fi
 
   # Write nudge for next session if present
@@ -560,14 +448,9 @@ Review the session and extract learnings now."
   # Update stats: increment profile_updates and recalculate total lines
   STATS_FILE="$HOME/.tandem/state/stats.json"
   if [ -f "$STATS_FILE" ]; then
-    # Calculate total profile lines
     TOTAL_LINES=0
-    if [ -d "$PROFILE_DIR" ]; then
-      for f in "$PROFILE_DIR"/*.md; do
-        [ -f "$f" ] || continue
-        FILE_LINES=$(wc -l < "$f" | tr -d ' ')
-        TOTAL_LINES=$((TOTAL_LINES + FILE_LINES))
-      done
+    if [ -f "$TARGET" ]; then
+      TOTAL_LINES=$(wc -l < "$TARGET" | tr -d ' ')
     fi
 
     UPDATED_STATS=$(jq --arg lines "$TOTAL_LINES" '.profile_updates += 1 | .profile_total_lines = ($lines | tonumber)' "$STATS_FILE")
@@ -692,11 +575,8 @@ if [ "$RECALL_STATUS" -eq 1 ] && [ -f "$MEMORY_DIR/MEMORY.md" ]; then
   echo "memory_lines: $LINE_COUNT" >> "$RECAP_FILE"
 fi
 
-if [ "$GROW_STATUS" -eq 1 ]; then
-  UPDATED=$(find "$PROFILE_DIR" -name "*.md" -mmin -5 -exec basename {} \; 2>/dev/null | tr '\n' ',' | sed 's/,$//')
-  if [ -n "$UPDATED" ]; then
-    echo "profile_files: $UPDATED" >> "$RECAP_FILE"
-  fi
+if [ "$GROW_STATUS" -eq 1 ] && [ -f "$PROFILE_DIR/USER.md" ]; then
+  echo "profile_files: USER.md" >> "$RECAP_FILE"
 fi
 
 exit 0
