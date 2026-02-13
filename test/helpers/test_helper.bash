@@ -109,7 +109,7 @@ STATS_EOF
 
 # Initialise a git repo in TEST_CWD with an initial commit
 init_test_git_repo() {
-  git -C "$TEST_CWD" init -q
+  git -C "$TEST_CWD" init -q -b main
   git -C "$TEST_CWD" config user.email "test@test.com"
   git -C "$TEST_CWD" config user.name "Test"
   echo "init" > "$TEST_CWD/README.md"

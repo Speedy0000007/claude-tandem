@@ -356,7 +356,8 @@ fi
 # Health check (only errors from current version)
 TANDEM_LOG="$HOME/.tandem/logs/tandem.log"
 if [ -f "$TANDEM_LOG" ] && [ -n "$PLUGIN_VERSION" ]; then
-  ISSUE_COUNT=$(grep -c "\[$PLUGIN_VERSION\].*\(\[ERROR\]\|\[WARN \]\)" "$TANDEM_LOG" 2>/dev/null || echo 0)
+  ISSUE_COUNT=$(grep -c "\[$PLUGIN_VERSION\].*\(\[ERROR\]\|\[WARN \]\)" "$TANDEM_LOG" 2>/dev/null)
+  ISSUE_COUNT="${ISSUE_COUNT:-0}"
   if [ "$ISSUE_COUNT" -gt 0 ]; then
     echo "${ISSUE_COUNT} issue(s) logged. Run /tandem:logs errors to review."
   fi
@@ -429,7 +430,7 @@ fi
 
 # Stale progress detection
 if [ -f "$MEMORY_DIR/progress.md" ]; then
-  PROGRESS_MTIME=$(stat -f '%m' "$MEMORY_DIR/progress.md" 2>/dev/null || stat -c '%Y' "$MEMORY_DIR/progress.md" 2>/dev/null)
+  PROGRESS_MTIME=$(tandem_file_mtime "$MEMORY_DIR/progress.md")
   SESSION_START=$(date +%s)
 
   if [ -n "$PROGRESS_MTIME" ]; then

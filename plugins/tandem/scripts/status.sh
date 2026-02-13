@@ -77,7 +77,8 @@ echo ""
 if [ "$RECALL" != "not installed" ]; then
   if [ -f "$MEMORY_DIR/MEMORY.md" ]; then
     MEM_LINES=$(wc -l < "$MEMORY_DIR/MEMORY.md" | tr -d ' ')
-    MEM_MTIME=$(stat -f '%Sm' -t '%b %d' "$MEMORY_DIR/MEMORY.md" 2>/dev/null || stat -c '%y' "$MEMORY_DIR/MEMORY.md" 2>/dev/null | cut -d' ' -f1)
+    MEM_EPOCH=$(tandem_file_mtime "$MEMORY_DIR/MEMORY.md")
+    MEM_MTIME=$(date -r "$MEM_EPOCH" '+%b %d' 2>/dev/null || date -d "@$MEM_EPOCH" '+%b %d' 2>/dev/null)
     echo "Memory: MEMORY.md ${MEM_LINES} lines, last updated ${MEM_MTIME}"
   else
     echo "Memory: No MEMORY.md yet"
@@ -92,8 +93,10 @@ if [ "$RECALL" != "not installed" ]; then
   # Global
   GLOBAL_FILE="$HOME/.tandem/memory/global.md"
   if [ -f "$GLOBAL_FILE" ]; then
-    ENTRY_COUNT=$(grep -c '^## ' "$GLOBAL_FILE" 2>/dev/null || echo 0)
-    GLOBAL_MTIME=$(stat -f '%Sm' -t '%b %d' "$GLOBAL_FILE" 2>/dev/null || stat -c '%y' "$GLOBAL_FILE" 2>/dev/null | cut -d' ' -f1)
+    ENTRY_COUNT=$(grep -c '^## ' "$GLOBAL_FILE" 2>/dev/null)
+    ENTRY_COUNT="${ENTRY_COUNT:-0}"
+    GLOBAL_EPOCH=$(tandem_file_mtime "$GLOBAL_FILE")
+    GLOBAL_MTIME=$(date -r "$GLOBAL_EPOCH" '+%b %d' 2>/dev/null || date -d "@$GLOBAL_EPOCH" '+%b %d' 2>/dev/null)
     echo "Global: ${ENTRY_COUNT} entries, last updated ${GLOBAL_MTIME}"
   else
     echo "Global: No cross-project activity logged yet"

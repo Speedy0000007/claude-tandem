@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <sub>Persistent memory, session handover, input cleanup, context compaction, commit enrichment, and developer learning. Pure bash, zero dependencies.</sub>
+  <sub>Persistent memory, session handover, input cleanup, context compaction, commit enrichment, and developer learning. Pure bash, one dependency (<code>jq</code>).</sub>
 </p>
 
 ```bash
@@ -28,9 +28,11 @@ claude "Let's work in Tandem"
 
 ## The problem
 
-AI coding agents are powerful, but the session lifecycle is broken. Claude Code has no persistent memory between sessions. MEMORY.md gets truncated at 200 lines. Context compaction erases your working state mid-session. There's no handover file, no progress.md that survives compaction, no cross-project awareness. Messy prompts produce messy output. Commit messages capture what changed but not why. And the developer learns nothing from the process.
+Claude Code has memory. MEMORY.md persists across sessions, auto-memory writes to it, CLAUDE.md is always loaded, and project rules carry forward. But there are gaps.
 
-Every session starts from scratch. Tandem fixes this by handling the work that happens around the building: memory, context, input quality, reasoning preservation, and learning. All through Claude Code's native hook system, zero external dependencies.
+MEMORY.md has no structure. It's a flat file with a 200-line cap, no priority tiers, and no awareness of what matters most. Context compaction preserves a summary, but loses the precise "where was I, what was I doing, what's next" detail needed to resume complex multi-session work. There's no session bridge, no cross-project awareness, and no mechanism to promote recurring patterns into permanent knowledge. Commit messages capture what changed but not why. And the developer learns nothing from the process.
+
+Tandem fills these gaps by handling the work that happens around the building: structured memory with priority-based retention, session handover via progress.md, input quality, reasoning preservation in git, and learning. All through Claude Code's native hook system.
 
 ---
 
@@ -49,11 +51,11 @@ Tandem is a Claude Code plugin that runs alongside your sessions, handling memor
 
 Each feature is independently valuable. Combined, they compound: better input leads to a smarter agent, richer commit history captures the reasoning permanently, and learning compounds across every session.
 
-### Pure bash. Zero overhead.
+### Pure bash. Minimal overhead.
 
-No Node. No Python. No MCP servers. No background processes. No databases. Just seven shell scripts, a shared library, and `jq`.
+No Node. No Python. No MCP servers. No long-running daemons. No databases. Seven hook scripts, a shared library, and `jq`.
 
-Tandem runs entirely through Claude Code's native hook system. Every feature is a plain bash script that fires on a lifecycle event, does its work, and exits. Nothing runs between hooks. Nothing persists in memory. Nothing phones home. The entire runtime is `~/.tandem/` and a handful of rules files.
+Tandem runs entirely through Claude Code's native hook system. Every feature is a plain bash script that fires on a lifecycle event, does its work, and exits. Session-end spawns a short-lived background worker for memory compaction (seconds, not minutes), but nothing persists between hooks. Nothing phones home. The entire runtime is `~/.tandem/` and a handful of rules files.
 
 Dependencies: `bash 3.2+` and `jq`. That's it. No `npm install`, no `pip install`, no compilation step, no container. Install in seconds, read the entire codebase in an afternoon.
 
@@ -94,11 +96,11 @@ To start a session without Tandem features, use `claude "Skip Tandem"` instead.
 
 Claude Code already has auto-memory, MEMORY.md, context compaction, and a hook system. Tandem doesn't build parallel infrastructure. It makes the native memory systems work better.
 
-- **Auto-memory writes MEMORY.md.** Tandem compacts it with priority-based retention so architectural decisions survive indefinitely while debugging details decay naturally.
+- **Auto-memory writes MEMORY.md.** Tandem compacts it with priority-based retention so architectural decisions persist across compaction cycles while debugging details decay naturally.
 - **Claude Code has no cross-project awareness.** Tandem adds a lightweight rolling log so sessions in one repo know what you've been doing elsewhere.
 - **Claude Code has no session bridge.** Tandem adds progress.md alongside MEMORY.md — same directory, same conventions.
 - **Git is already the permanent record.** Tandem enriches commit messages with session context so nothing is lost to compaction. Your thinking persists in `git log` forever.
-- **Rules files, hooks, skills** — all use Claude Code's native plugin system. No MCP servers, no background processes, no databases.
+- **Rules files, hooks, skills** — all use Claude Code's native plugin system. No MCP servers, no persistent services, no databases.
 
 If Claude Code ships a native version of something Tandem does, Tandem should get out of the way. The goal is to fill gaps, not compete.
 
@@ -180,7 +182,7 @@ Reports which features are installed, hook health, memory stats, and profile sta
 
 ## How it works — Claude Code hooks, no background agents
 
-Tandem uses Claude Code's native hook system. Every feature is a lifecycle hook that runs, does its work, and exits. Zero background services, zero databases, zero file pollution in your repos.
+Tandem uses Claude Code's native hook system. Every feature is a lifecycle hook that runs, does its work, and exits. No persistent services, no databases, no file pollution in your repos.
 
 | Event | Script | Purpose |
 |-------|--------|---------|

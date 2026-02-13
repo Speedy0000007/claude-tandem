@@ -68,6 +68,14 @@ tandem_header() {
   echo "${_TANDEM_LOGO} ~ Tandem v${version} · ▷ ${sessions} · ↻ ${compactions} · ◆ ${updates}"
 }
 
+# ─── Cross-platform helpers ───────────────────────────────────────────────────
+
+# Returns file modification time as epoch seconds.
+# Linux stat -c works first; macOS stat -f as fallback.
+tandem_file_mtime() {
+  stat -c '%Y' "$1" 2>/dev/null || stat -f '%m' "$1" 2>/dev/null
+}
+
 # ─── Dependency helpers ───────────────────────────────────────────────────────
 
 tandem_require_jq() {

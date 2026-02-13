@@ -23,7 +23,7 @@ MEMORY_DIR="$HOME/.claude/projects/${SANITISED}/memory"
 
 # Check if progress.md exists and is recent (< 5 minutes)
 if [ -f "$MEMORY_DIR/progress.md" ]; then
-  PROGRESS_MTIME=$(stat -f '%m' "$MEMORY_DIR/progress.md" 2>/dev/null || stat -c '%Y' "$MEMORY_DIR/progress.md" 2>/dev/null)
+  PROGRESS_MTIME=$(tandem_file_mtime "$MEMORY_DIR/progress.md")
   NOW=$(date +%s)
   if [ -n "$PROGRESS_MTIME" ]; then
     AGE=$((NOW - PROGRESS_MTIME))
