@@ -247,6 +247,15 @@ EOF
   [ "$total" = "5" ]
 }
 
+@test "total_sessions NOT incremented on compact source" {
+  create_stats 5 0 0
+  run_session_start "compact"
+  assert_success
+  local total
+  total=$(jq -r '.total_sessions' "$HOME/.tandem/state/stats.json")
+  [ "$total" = "5" ]
+}
+
 # ─── 18–20. MEMORY.md corruption detection ──────────────────────────────────
 
 @test "short MEMORY.md (< 5 lines): rolls back to backup if available" {

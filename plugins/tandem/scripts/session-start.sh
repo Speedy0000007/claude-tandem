@@ -256,6 +256,7 @@ if [ -f "$STATS_FILE" ]; then
       .total_sessions += 1 |
       .last_session = $today
     ' "$STATS_FILE")
+    tandem_log debug "Session count incremented (source=$SOURCE, new_total=$(echo "$NEW_STATS" | jq -r '.total_sessions'))"
 
     TMPFILE=$(mktemp "$STATS_FILE.XXXXXX")
     if [ -n "$TMPFILE" ] && [ -f "$TMPFILE" ]; then
