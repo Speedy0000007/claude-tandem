@@ -12,3 +12,4 @@ examples/
 
 # Claude Code plugin artifacts
 .orphaned_at
+.firecrawl/
