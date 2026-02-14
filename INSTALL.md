@@ -159,6 +159,8 @@ After installation and first run, you'll have:
 │       │   └── plugin.json      # Plugin manifest (version 1.1.0)
 │       ├── hooks/
 │       │   └── hooks.json       # Hook definitions
+│       ├── lib/
+│       │   └── tandem.sh           # Shared library (logging, sessions, LLM)
 │       ├── scripts/
 │       │   ├── session-start.sh
 │       │   ├── session-end.sh
@@ -168,6 +170,7 @@ After installation and first run, you'll have:
 │       ├── skills/
 │       │   ├── clarify/
 │       │   ├── grow/
+│       │   ├── sessions/           # Session registry inspection
 │       │   └── status/
 │       ├── rules/
 │       │   ├── tandem-recall.md
@@ -184,6 +187,9 @@ After installation and first run, you'll have:
 
 ~/.tandem/
 ├── .provisioned                 # First-run marker (timestamp)
+├── sessions/                    # Session registry (ephemeral, auto-cleaned)
+│   └── <session-id>/
+│       └── state.json           # pid, project, branch, heartbeat, task
 ├── profile/
 │   └── career-context.md        # Provisioned from template
 ├── memory/
@@ -283,7 +289,7 @@ CLAUDE_PLUGIN_ROOT=~/.claude/plugins/tandem \
 
 Once installed, Tandem works automatically in the background:
 
-1. **Recall** — tracks progress across sessions via `progress.md`
+1. **Recall** — tracks progress across sessions via `progress.md`, registers sessions for concurrent awareness
 2. **Grow** — extracts learning opportunities and updates your technical profile
 3. **Clarify** — prompts for clearer input when requests are ambiguous
 

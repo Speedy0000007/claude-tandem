@@ -72,13 +72,17 @@ Tandem hooks receive JSON input via stdin. Each hook reads specific fields:
 
 **Reads:**
 - `cwd` (string) — Current working directory
+- `session_id` (string, optional) — Claude Code's session identifier
 
 **Example:**
 ```json
-{"cwd": "/Users/jonny/dev/my-project"}
+{"cwd": "/Users/jonny/dev/my-project", "session_id": "abc123"}
 ```
 
 **Behavior:**
+- Cleans up orphaned sessions (dead PIDs) from the session registry
+- Registers the current session at `~/.tandem/sessions/<session-id>/state.json`
+- Detects sibling sessions (other active sessions on the same project) and reports them
 - First run: provisions rules files to `~/.claude/rules/` and profile directory
 - Every run: checks for stale progress.md, version upgrades, CLAUDE.md section injection
 - Post-compaction: displays "Resuming" state snapshot
@@ -88,16 +92,20 @@ Tandem hooks receive JSON input via stdin. Each hook reads specific fields:
 
 **Reads:**
 - `cwd` (string) — Current working directory
+- `session_id` (string, optional) — Claude Code's session identifier (for deregistration)
 
 **Example:**
 ```json
-{"cwd": "/Users/jonny/dev/my-project"}
+{"cwd": "/Users/jonny/dev/my-project", "session_id": "abc123"}
 ```
 
 **Behavior:**
+- Phase 0: Checkpoint commit with descriptive subject (`claude(checkpoint): <current task>`)
 - Phase 1: Calls Haiku to compact MEMORY.md (budget: $0.05)
 - Phase 2: Calls Haiku to extract learnings to profile (budget: $0.05)
 - Phase 3: Updates global activity log (`~/.tandem/memory/global.md`)
+- Deregisters the session from `~/.tandem/sessions/`
+- progress.md is preserved (Working State carries forward to the next session)
 - Only fires if `progress.md` exists (trivial sessions skip LLM calls)
 
 ### PreCompact Hook (`pre-compact.sh`)
@@ -172,6 +180,7 @@ Tandem never writes to user repositories. All data goes to Claude Code's native 
 | `~/.tandem/logs/tandem.log` | Unified activity/error log (all hooks) |
 | `~/.tandem/logs/clarify.jsonl` | Clarify decision log (for review) |
 | `~/.tandem/.env` | Environment variable overrides (loaded by every hook) |
+| `~/.tandem/sessions/<session-id>/state.json` | Session registry (pid, project, branch, heartbeat, task) |
 | `~/.tandem/.provisioned` | First-run marker file |
 | `~/.tandem/next-nudge` | Ephemeral learning nudge for next session |
 
@@ -339,8 +348,8 @@ This runs on every session startup and symlinks all local directory-based market
 | Script | Purpose | Link |
 |--------|---------|------|
 | `detect-raw-input.sh` | Clarify: assess and restructure user prompts | [plugins/tandem/scripts/detect-raw-input.sh](/plugins/tandem/scripts/detect-raw-input.sh) |
-| `session-start.sh` | Provisioning, state recovery, status indicators | [plugins/tandem/scripts/session-start.sh](/plugins/tandem/scripts/session-start.sh) |
-| `session-end.sh` | Recall (compaction) + Grow (extraction) | [plugins/tandem/scripts/session-end.sh](/plugins/tandem/scripts/session-end.sh) |
+| `session-start.sh` | Session registration, orphan cleanup, sibling detection, provisioning, state recovery | [plugins/tandem/scripts/session-start.sh](/plugins/tandem/scripts/session-start.sh) |
+| `session-end.sh` | Checkpoint commit + Recall (compaction) + Grow (extraction) + session deregistration | [plugins/tandem/scripts/session-end.sh](/plugins/tandem/scripts/session-end.sh) |
 | `pre-compact.sh` | State snapshot before compaction | [plugins/tandem/scripts/pre-compact.sh](/plugins/tandem/scripts/pre-compact.sh) |
 | `task-completed.sh` | Async progress.md staleness check | [plugins/tandem/scripts/task-completed.sh](/plugins/tandem/scripts/task-completed.sh) |
 | `sync-local-plugins.sh` | Generic plugin cache symlink sync | [plugins/tandem/scripts/sync-local-plugins.sh](/plugins/tandem/scripts/sync-local-plugins.sh) |

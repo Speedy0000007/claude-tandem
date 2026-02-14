@@ -284,6 +284,45 @@ SessionStart detected that MEMORY.md was corrupted (too short or contains LLM re
 
 ---
 
+## Orphaned or Stale Sessions
+
+**Symptom:** `/tandem:sessions` shows sessions with dead PIDs or stale heartbeats, or the status line reports sibling sessions that don't exist.
+
+**Diagnosis:**
+
+1. **List sessions:**
+   ```bash
+   ls ~/.tandem/sessions/
+   ```
+
+2. **Check a session's state:**
+   ```bash
+   cat ~/.tandem/sessions/<session-id>/state.json | jq .
+   ```
+
+3. **Verify PID is alive:**
+   ```bash
+   kill -0 <pid>  # exit 0 = alive, exit 1 = dead
+   ```
+
+**Solutions:**
+
+1. **Automatic cleanup:** Orphaned sessions (dead PIDs) are cleaned automatically at session start and periodically during the status line render.
+
+2. **Manual cleanup:**
+   ```bash
+   /tandem:sessions clean
+   ```
+   This force-removes all sessions with dead PIDs.
+
+3. **Nuclear option:**
+   ```bash
+   rm -rf ~/.tandem/sessions/
+   ```
+   Safe to do. Sessions will re-register on next start.
+
+---
+
 ## Getting Help
 
 If issues persist after trying these solutions:

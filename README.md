@@ -53,7 +53,7 @@ Each feature is independently valuable. Combined, they compound: better input le
 
 ### Pure bash. Minimal overhead.
 
-No Node. No Python. No MCP servers. No long-running daemons. No databases. Seven hook scripts, a shared library, and `jq`.
+No Node. No Python. No MCP servers. No long-running daemons. No databases. Seven hook scripts, a shared library (`lib/tandem.sh`), and `jq`.
 
 Tandem runs entirely through Claude Code's native hook system. Every feature is a plain bash script that fires on a lifecycle event, does its work, and exits. Session-end spawns a short-lived background worker for memory compaction (seconds, not minutes), but nothing persists between hooks. Nothing phones home. The entire runtime is `~/.tandem/` and a handful of rules files.
 
@@ -102,6 +102,22 @@ Claude Code already has auto-memory, MEMORY.md, context compaction, and a hook s
 - **Git is already the permanent record.** Tandem enriches commit messages with session context so nothing is lost to compaction. Your thinking persists in `git log` forever.
 - **Rules files, hooks, skills** — all use Claude Code's native plugin system. No MCP servers, no persistent services, no databases.
 
+**Two tracks, one system.** Tandem preserves context through two parallel tracks that reinforce each other:
+
+```
+Memory track:    progress.md → MEMORY.md → CLAUDE.md
+                  (session)    (project)    (permanent rules)
+
+Git track:       checkpoint commits → squashed into real commits → git log
+                  (session context)   (clean history)              (epistemic record)
+```
+
+The memory track manages what Claude knows: session notes compact into working memory, working memory compacts into project memory, and proven patterns promote into permanent rules. Each stage increases signal density.
+
+The git track captures how you were thinking. Every commit body is a snapshot of the epistemic state at that moment: what was known, what wasn't, what constraints existed, what alternatives were considered, and why this approach won. Six months later, when someone asks "why is this code the way it is?", the commit body answers with the full reasoning, including the limitations and assumptions that shaped the decision. A change that looks wrong today might have been the right call given what was known at the time. The git track preserves that context.
+
+Neither track depends on the other. Together, they ensure nothing is ever truly lost.
+
 If Claude Code ships a native version of something Tandem does, Tandem should get out of the way. The goal is to fill gaps, not compete.
 
 ---
@@ -124,27 +140,30 @@ A UserPromptSubmit hook detects long, unstructured input (dictation, brain dumps
 
 Claude already remembers. Recall makes it *good* at remembering.
 
-- **Session bridge via progress.md** — maintains a two-part `progress.md` alongside MEMORY.md: a rewritable Working State snapshot (current task, approach, blockers, key files) and an append-only Session Log below. Survives context compaction.
+- **Session bridge via progress.md** — maintains a two-part `progress.md` alongside MEMORY.md: a rewritable Working State snapshot (current task, approach, blockers, key files) and an append-only Session Log below. Survives context compaction. progress.md persists across sessions (Working State carries forward to the next session, gets overwritten when fresh work begins).
+- **Session registry** — each session registers at `~/.tandem/sessions/<session-id>/` with a `state.json` tracking pid, project, branch, heartbeat, and current task. Sessions heartbeat on every status line render, making them discoverable by sibling sessions. Orphaned sessions (dead pid) are cleaned up automatically. Run `/tandem:sessions` to inspect the registry.
+- **Sibling awareness** — at session start, Tandem discovers other active sessions on the same project and reports them. The status line shows concurrent session count in yellow. This is the foundation for safe concurrent compaction (only one session compacts at a time).
 - **Pre-compaction safety net** — a PreCompact hook captures the precise "where are we right now" before compaction. When structured Working State markers exist, this is deterministic (no LLM needed). After compaction, SessionStart surfaces this snapshot so Claude picks up exactly where it left off.
-- **Priority-based memory compaction** — at session end, rewrites MEMORY.md to stay under 200 lines using three priority tiers: [P1] permanent (architecture, preferences), [P2] active (current state, recent decisions), [P3] ephemeral (debugging details). Each entry carries temporal metadata (observed: YYYY-MM-DD) for evidence-based pruning.
+- **Priority-based memory compaction** — at session end, rewrites MEMORY.md to stay under 200 lines using three priority tiers: [P1] permanent (architecture, preferences), [P2] active (current state, recent decisions), [P3] ephemeral (debugging details). Each entry carries temporal metadata (observed: YYYY-MM-DD) for evidence-based pruning. After successful compaction, progress.md is truncated to just the Working State (the Session Log has been absorbed into MEMORY.md).
 - **Cross-project context** — at session end, logs a summary of what happened to a global rolling log (`~/.tandem/memory/global.md`, 30 entries max). At session start, Claude sees recent activity from other projects for cross-repo awareness.
 - **Progress nudges** — when a task completes and progress.md is stale, an async nudge reminds Claude to record what happened.
 - **Pattern promotion** — recurring patterns are auto-promoted during compaction and surfaced as candidates for CLAUDE.md. Run `/tandem:recall promote` to manually promote high-recurrence themes.
+- **CLAUDE.md promotion** — the data funnel flows `progress.md → MEMORY.md → CLAUDE.md`. High-signal [P1] patterns that prove stable across sessions are proactively promoted to the appropriate CLAUDE.md file (global `~/.claude/CLAUDE.md`, project root, or subdomain). Promoted entries are removed from MEMORY.md to avoid duplication. CLAUDE.md is the permanent record; MEMORY.md is the working buffer.
 
-**What you see:** `Recalled.` at session start means the previous session's memory was compacted. `Recent work in other projects:` shows what you've been doing elsewhere. After compaction, `Resuming. Before compaction you were: ...` restores your exact position. If a session ends abnormally, stale progress is detected and recovered next time.
+**What you see:** `Recalled.` at session start means the previous session's memory was compacted. `Recent work in other projects:` shows what you've been doing elsewhere. `Active sessions on this project: N sibling(s)` warns of concurrent sessions. After compaction, `Resuming. Before compaction you were: ...` restores your exact position. If a session ends abnormally, stale progress is detected and recovered next time.
 
-### Commit — durable memory in git history
+### Commit — epistemic snapshots in git history
 
-Git is the only permanent record. Progress.md gets compacted. MEMORY.md gets rewritten. Commit messages persist forever.
+Progress.md gets compacted. MEMORY.md gets rewritten. Commit messages persist forever.
 
-Tandem treats every commit as a context restoration point. Not just what changed, but why: what process led here, what was considered, what constraints existed, what was known and unknown at the time.
+Tandem treats every commit as an epistemic snapshot: the reasoning, assumptions, and knowledge state at the moment of the decision. Not just what changed, but why this approach won, what alternatives were considered, what constraints existed, and what was unknown at the time. A decision that looks wrong in hindsight might have been the right call given the information available. The commit body preserves that context.
 
 - **Commit body enforcement** — a PreToolUse hook ensures every commit has a body that captures the developer's thinking. Subject line follows Conventional Commits. Body captures the why, the what-else, the what-next.
-- **Session checkpoints** — at session end, before memory compaction, Tandem auto-commits a checkpoint that preserves the full session context in git. Only commits when there are actual staged changes.
+- **Session checkpoints** — at session end, before memory compaction, Tandem auto-commits a checkpoint with a descriptive subject line extracted from your current task: `claude(checkpoint): <what you were doing>`. Only commits when there are actual staged changes.
 - **Auto-commit squash** — checkpoint commits are automatically squashed into your next real commit, keeping history clean. If you try to push with un-squashed checkpoints, the push is blocked with guidance on how to resolve it. Run `/tandem:squash` for manual control.
 - **`## Last Session` continuation** — every memory compaction writes a `## Last Session` section to MEMORY.md with what was being worked on, where it left off, and what comes next. The next session picks up immediately, even when no code was changed.
 
-The result: `git log` becomes a complete, queryable history of every AI session. Combined with any tool that can read git history, you can ask "why is this code the way it is?" at any point and get the full reasoning from the session that wrote it.
+The result: `git log` becomes a queryable history of reasoning across every AI session. Ask "why is this code the way it is?" and get the full thought process, including what was known, what wasn't, and what tradeoffs were accepted. Combined with tools that read git history, this turns your commit log into a decision journal.
 
 **What you see:** If you try to commit without a body, the hook blocks it and feeds you session context to write from. At session end, `Session captured` confirms the checkpoint was written. On next session start, you'll see how many auto-commits are pending and whether they'll be auto-squashed.
 
@@ -177,6 +196,12 @@ The user gets smarter. Learns as they go.
 
 Reports which features are installed, hook health, memory stats, and profile stats.
 
+```
+/tandem:sessions
+```
+
+Lists active sessions grouped by project, identifies orphans (dead PIDs), and offers cleanup. Use `/tandem:sessions clean` to force-clean orphans.
+
 ---
 
 ## How it works — Claude Code hooks, no background agents
@@ -188,8 +213,8 @@ Tandem uses Claude Code's native hook system. Every feature is a lifecycle hook 
 | PreToolUse | `validate-commit.sh` | Conventional commit format + body enforcement |
 | PreToolUse | `squash-autocommits.sh` | Auto-squash checkpoints on commit, block push with un-squashed checkpoints |
 | UserPromptSubmit | `detect-raw-input.sh` | Clarify detection |
-| SessionStart | `session-start.sh` | Provisioning, post-compaction state recovery, cross-project context, stale progress detection |
-| SessionEnd | `session-end.sh` | Session checkpoint (phase 0) + memory compaction (phase 1) + pattern extraction (phase 2) + global log (phase 3) |
+| SessionStart | `session-start.sh` | Session registration, orphan cleanup, sibling detection, provisioning, post-compaction state recovery, cross-project context |
+| SessionEnd | `session-end.sh` | Checkpoint commit (phase 0) + memory compaction (phase 1) + pattern extraction (phase 2) + global log (phase 3) + session deregistration |
 | PreCompact | `pre-compact.sh` | Current state snapshot + progress safety net |
 | TaskCompleted | `task-completed.sh` | Async progress nudge when progress.md is stale |
 
@@ -217,11 +242,20 @@ With the default Haiku backend, each LLM call has a $0.15 budget cap. Only hooks
 
 Typical session cost: **$0.03-0.08**. With a local LLM backend: **$0**.
 
+### Memory scoping
+
+Tandem stores all memory (progress.md, MEMORY.md) in a directory derived from the **working directory where Claude Code was launched**, not the git root. The path is `~/.claude/projects/{sanitised-cwd}/memory/`.
+
+This means: if you launch Claude Code from `~/dev/` and then work on files in `~/dev/my-project/`, memory is stored under `~/dev/`, not `~/dev/my-project/`. Always start Claude Code from your project root directory so that memory is scoped correctly.
+
+Tandem warns at startup if the current working directory is not a git root.
+
 ### Files created
 
 Tandem creates zero files in your repositories. Everything lives in:
 - `~/.claude/rules/tandem-*.md` — behavioural rules including commit body enforcement (install = copy, uninstall = delete)
 - `~/.claude/projects/{project}/memory/progress.md` — session bridge with structured Working State + Session Log (alongside native MEMORY.md)
+- `~/.tandem/sessions/<session-id>/state.json` — session registry (created at start, removed at end, orphans cleaned automatically)
 - `~/.tandem/profile/USER.md` — learning profile
 - `~/.tandem/memory/global.md` — cross-project activity log (30 entries max)
 
@@ -278,6 +312,9 @@ This removes the plugin (skills, hooks, scripts). Your data is preserved.
 
    # State files and recurrence data
    rm -rf ~/.tandem/state/
+
+   # Session registry
+   rm -rf ~/.tandem/sessions/
 
    # Global cross-project memory
    rm -rf ~/.tandem/memory/
