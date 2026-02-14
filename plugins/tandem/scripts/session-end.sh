@@ -110,46 +110,57 @@ recall_compact() {
 
   # Build the compaction prompt
   PROMPT=$(cat <<PROMPT_EOF
-You are a memory compaction agent. Your job is to produce a concise, well-structured MEMORY.md file that stays under 200 lines.
+You are a memory compaction agent. You produce MEMORY.md, the file that is loaded into every future Claude Code session for this project. It is the ONLY persistent context the next session has. Every line must earn its place.
 
-You will receive two inputs:
-1. The current MEMORY.md (may be empty)
-2. The session progress notes
+## Purpose
 
-## Priority-based retention
+MEMORY.md answers one question: "What does the next Claude session need to know to be effective on this project?" Nothing else belongs here.
 
-Classify every piece of information:
-- [P1] PERMANENT: Architecture decisions, user preferences, workflow conventions, recurring patterns. Survive indefinitely.
-- [P2] ACTIVE: Current project state, recent decisions, in-progress context. Survive 3-5 compactions, then decay.
-- [P3] EPHEMERAL: Debugging details, completed task specifics, routine operations. Prune first.
+**High signal (include):** Architecture decisions. File paths and conventions. User preferences and workflow patterns. Active project state. Key technical constraints. What was being worked on and what comes next.
 
-Compaction rules:
-- Keep ALL [P1] entries (may rephrase for brevity, never remove)
-- Keep [P2] entries from recent sessions. Promote to [P1] if still relevant after 3+ compactions, otherwise prune.
+**Low signal (exclude):** Debugging play-by-play. Completed task blow-by-blow. Meta-commentary about the compaction process itself. LLM reasoning or reflections. Verbose explanations of things the code already shows. Anything that reads like a conversation transcript rather than reference material.
+
+## Inputs
+
+1. The current MEMORY.md (your base, may be empty on first compaction)
+2. Session progress notes (new information to merge in)
+
+## Priority tiers
+
+Every entry gets a priority marker:
+- [P1] PERMANENT: Survives indefinitely. Architecture, user preferences, recurring patterns, key file paths.
+  Example: "[P1] Shell scripts only (bash + jq). No Node, no Python. (observed: 2026-02-10)"
+  Example: "[P1] User prefers conventional commits with rich bodies. (observed: 2026-02-11)"
+- [P2] ACTIVE: Survives 3-5 compactions. Current project state, recent decisions, in-progress work.
+  Example: "[P2] Migrating auth from JWT to session cookies. (observed: 2026-02-13)"
+- [P3] EPHEMERAL: Pruned first. Debugging details, one-off fixes, routine operations.
+  Example: "[P3] Fixed off-by-one in pagination query. (observed: 2026-02-14)"
+
+Rules:
+- Keep ALL [P1] entries (rephrase for brevity if needed, never remove)
+- Keep [P2] entries from recent sessions. Promote to [P1] if still relevant after 3+ compactions.
 - Prune [P3] entries unless from the current session
-- New progress.md information starts as [P2] unless clearly architectural ([P1]) or ephemeral ([P3])
-- Prefix every entry with its priority marker
+- New information defaults to [P2] unless clearly architectural ([P1]) or ephemeral ([P3])
 
-## Temporal context
+## Temporal metadata
 
-- Include (observed: YYYY-MM-DD) on each entry or group of entries
-- Carry forward existing dates from prior compactions unchanged
-- New entries from this session get today's date: $(date +%Y-%m-%d)
-- The date is when the fact was first recorded, not when the event occurred
+- Append (observed: YYYY-MM-DD) to entries. Carry forward existing dates unchanged.
+- New entries from this session: (observed: $(date +%Y-%m-%d))
 
-## General instructions
+## Structure
 
-- Start from the existing MEMORY.md content as your base
-- Merge in key facts, decisions, patterns, and context from progress.md
-- Prune stale or redundant entries — anything no longer relevant to active work
-- Stay under 200 lines total (this is the native loading limit — beyond this, content is invisible)
-- Leave any \`## User Context\` section completely intact (user-authored, not for compaction)
-- Do NOT reference or modify other files in the memory/ directory
-- Output ONLY the new MEMORY.md content — no explanation, no code fences, no preamble
-- Always include a \`## Last Session\` section at the very end (before the THEMES line). This section is replaced every compaction, never accumulated. It should contain: what was being worked on, where it left off, what comes next. Write it so the next session can continue immediately. 2-5 lines max.
-- If progress.md contains a \`<!-- working-state:start/end -->\` section, treat its contents as the most authoritative description of the session's final state. Use it to populate the \`## Last Session\` section.
-- Maintain a \`## Active Plans\` section listing file paths to plan documents referenced in the progress notes. Carry forward plans from the existing MEMORY.md. Remove a plan only when the progress notes indicate it was implemented or abandoned. If no plans exist, omit the section entirely.
-- Also identify 1-3 recurring themes from this session as lowercase-hyphenated slugs. If a slug matches an existing theme, reuse it. Output the themes on their own line at the very end: \`THEMES: slug-1, slug-2\`
+- Start with \`# Project Memory\` (FIRST LINE MUST be a markdown heading or output is rejected)
+- Group entries under semantic headings (\`## Architecture\`, \`## Conventions\`, \`## Current State\`, etc.)
+- Leave any \`## User Context\` section intact (user-authored, never modify)
+- End with \`## Last Session\` (replaced every compaction, 2-5 lines): what was being worked on, where it left off, what comes next. If progress.md has \`<!-- working-state:start/end -->\` markers, use that as the authoritative source.
+- Maintain \`## Active Plans\` listing referenced plan file paths. Remove only when implemented or abandoned. Omit section if empty.
+- Final line: \`THEMES: slug-1, slug-2\` (1-3 lowercase-hyphenated recurring theme slugs. Reuse existing slugs when possible.)
+
+## Hard constraints
+
+- Stay under 200 lines (the loading limit; beyond this, content is invisible)
+- Output ONLY the MEMORY.md content. No explanation, no code fences, no preamble.
+- Be terse. Bullet points, not paragraphs. Facts, not narrative.
 
 PROMPT_EOF
   )
@@ -208,6 +219,12 @@ Produce the compacted MEMORY.md now."
   fi
   if echo "$RESULT" | grep -qiE '^(I cannot|I'"'"'m sorry|I am sorry|I apologize|As an AI)'; then
     tandem_log error "compaction failed: LLM returned refusal"
+    return 1
+  fi
+  # Structural check: first line must be a markdown heading (not LLM reasoning)
+  FIRST_LINE=$(echo "$RESULT" | head -1)
+  if [[ "$FIRST_LINE" != '#'* ]]; then
+    tandem_log error "compaction failed: first line is not a heading ('$(echo "$FIRST_LINE" | head -c 60)')"
     return 1
   fi
 
@@ -365,17 +382,31 @@ grow_extract() {
 You maintain USER.md, a lightweight profile of this user's technical understanding.
 It helps a mentoring system know what the user already understands (so it does not repeat itself) and where growth edges exist (for targeted nudges).
 
-This is not a knowledge base. It is a concise signal about the user's learning trajectory. Keep it under 80 lines.
+This is a PERSONAL PROFILE of a human user. It is NOT a knowledge base, NOT a framework document, NOT internal reasoning or planning output.
+
+Keep it under 80 lines. The file MUST follow this exact structure:
+
+# User Profile
+
+## Career Context
+(role, stack, strengths, goals)
+
+## Technical Understanding
+(what they know well)
+
+## Growth Edges
+(where they are building depth)
 
 Rules:
-- Only update when the session reveals something about understanding level, not when a task was merely completed
-- Do not add project-specific details, debugging notes, or implementation mechanics
+- Only update when the session reveals something about the USER's understanding level, not when a task was merely completed
+- Do not add project-specific details, debugging notes, implementation mechanics, or framework/system design content
+- This is about the PERSON, not about the codebase or tools. Write about what THEY know and where THEY are growing.
 - Merge new observations with existing content. Preserve what is already there unless it is clearly outdated
 - If the session reveals career context (role, stack, goals), update the Career Context section
 - Pay special attention to recurring themes (provided below) -- if a theme keeps appearing but the profile has thin coverage, that is a high-priority area to capture
 - If you spot a genuine learning gap worth highlighting, output a NUDGE line before the profile: NUDGE: [friendly one-sentence observation]
 
-Output the full updated USER.md content below. Or if nothing changed: NONE
+Output the full updated USER.md content below (starting with "# User Profile"). Or if nothing changed: NONE
 
 PROMPT_EOF
   )
@@ -421,9 +452,14 @@ Review the session and update the profile now."
   # Strip code fences
   CONTENT=$(echo "$CONTENT" | sed '/^```/d')
 
-  # Validate: must contain a heading
-  if ! echo "$CONTENT" | grep -q "^# "; then
-    tandem_log warn "extraction returned unexpected format, skipping"
+  # Validate: first heading must be "# User Profile" and at least one expected section present
+  FIRST_HEADING=$(echo "$CONTENT" | grep -m1 "^# " | sed 's/^ *//')
+  if [ "$FIRST_HEADING" != "# User Profile" ]; then
+    tandem_log warn "extraction returned wrong format (first heading: '$FIRST_HEADING'), skipping"
+    return 0
+  fi
+  if ! echo "$CONTENT" | grep -q "^## "; then
+    tandem_log warn "extraction missing section headings, skipping"
     return 0
   fi
 
@@ -568,10 +604,25 @@ recall_compact && RECALL_STATUS=1          # Phase 1: compact MEMORY.md
 grow_extract && GROW_STATUS=1              # Phase 2: extract learnings to profile
 global_activity && GLOBAL_STATUS=1         # Phase 3: cross-project log
 
-# Keep progress.md for next session continuity (Working State survives,
-# gets overwritten when the next session writes a fresh state).
-# Only append failure info if compaction failed.
+# After successful compaction, truncate progress.md to frontmatter + Working State.
+# The Session Log has been absorbed into MEMORY.md; keeping it causes unbounded growth.
+# On failure, append a failure marker but preserve everything for retry next session.
 if [ "$RECALL_STATUS" -eq 1 ] && [ "$GROW_STATUS" -eq 1 ]; then
+  # Truncate to frontmatter + Working State only
+  if [ -f "$MEMORY_DIR/progress.md" ]; then
+    TRUNCATED=$(awk '
+      /^---$/ && !in_fm { in_fm=1; print; next }
+      in_fm && /^---$/ { in_fm=0; print; next }
+      in_fm { print; next }
+      /<!-- working-state:start -->/ { in_ws=1 }
+      in_ws { print }
+      /<!-- working-state:end -->/ { in_ws=0 }
+    ' "$MEMORY_DIR/progress.md")
+    if [ -n "$TRUNCATED" ]; then
+      echo "$TRUNCATED" > "$MEMORY_DIR/progress.md"
+      tandem_log info "progress.md truncated to working state"
+    fi
+  fi
   tandem_log info "session end complete (recall: ok, grow: ok)"
 else
   echo "" >> "$MEMORY_DIR/progress.md"
