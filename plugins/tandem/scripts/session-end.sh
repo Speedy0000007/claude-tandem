@@ -11,6 +11,8 @@
 if [ "${1:-}" = "--worker" ]; then
   CWD="$2"
   [ -z "$CWD" ] && exit 0
+  TANDEM_SESSION_ID="${3:-}"
+  export TANDEM_SESSION_ID
 
   PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(dirname "$(dirname "$0")")}"
   _TANDEM_SCRIPT="session-end"
@@ -63,6 +65,10 @@ if [ -z "${TANDEM_WORKER:-}" ]; then
   CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
   [ -z "$CWD" ] && exit 0
 
+  # Capture session_id for deregistration
+  HOOK_SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+  [ -z "$HOOK_SESSION_ID" ] && HOOK_SESSION_ID="${TANDEM_SESSION_ID:-}"
+
   # Compute auto-memory directory
   SANITISED=$(echo "$CWD" | sed 's|/|-|g')
   MEMORY_DIR="$HOME/.claude/projects/${SANITISED}/memory"
@@ -76,7 +82,7 @@ if [ -z "${TANDEM_WORKER:-}" ]; then
   tandem_log info "session end: ${PROGRESS_LINES} lines of progress"
 
   # Spawn detached worker process and exit
-  nohup "$0" --worker "$CWD" </dev/null &>/dev/null &
+  nohup "$0" --worker "$CWD" "$HOOK_SESSION_ID" </dev/null &>/dev/null &
   disown
   exit 0
 fi
@@ -573,6 +579,9 @@ else
   echo "Recall completed: $RECALL_STATUS, Grow completed: $GROW_STATUS" >> "$MEMORY_DIR/progress.md"
   tandem_log warn "session end partial failure (recall: ${RECALL_STATUS}, grow: ${GROW_STATUS})"
 fi
+
+# Deregister session
+tandem_session_deregister "${TANDEM_SESSION_ID:-}"
 
 # Write recap for next session
 RECAP_FILE="$HOME/.tandem/.last-session-recap"

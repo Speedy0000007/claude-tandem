@@ -81,6 +81,16 @@ if [ ! -f "$MARKER_FILE" ]; then
   fi
 fi
 
+# --- Session registration ---
+
+# Clean up orphaned sessions before registering
+tandem_cleanup_orphans
+
+# Derive session_id from Claude Code's session_id (in stdin JSON) or fallback
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+[ -z "$SESSION_ID" ] && SESSION_ID="${PPID}-$(date +%s)"
+tandem_session_register "$CWD" "$SESSION_ID"
+
 # --- Initialize stats ---
 
 if [ ! -f "$HOME/.tandem/state/stats.json" ]; then
@@ -299,6 +309,24 @@ tandem_header
 # First run welcome
 if [ "$FIRST_RUN" -eq 1 ]; then
   echo "Welcome! Run /tandem:status to get started."
+fi
+
+# Sibling sessions
+SIBLINGS=$(tandem_sibling_sessions "$CWD" "$SESSION_ID")
+if [ -n "$SIBLINGS" ]; then
+  SIBLING_COUNT=$(echo "$SIBLINGS" | wc -l | tr -d ' ')
+  echo "Active sessions on this project: $SIBLING_COUNT sibling(s)"
+  for sid in $SIBLINGS; do
+    local_state="$TANDEM_SESSIONS_DIR/$sid/state.json"
+    if [ -f "$local_state" ]; then
+      s_branch=$(jq -r '.branch // "?"' "$local_state" 2>/dev/null)
+      s_task=$(jq -r '.current_task // ""' "$local_state" 2>/dev/null)
+      s_heartbeat=$(jq -r '.last_heartbeat // ""' "$local_state" 2>/dev/null)
+      s_info="  - $sid: $s_branch"
+      [ -n "$s_task" ] && s_info="$s_info, $s_task"
+      echo "$s_info"
+    fi
+  done
 fi
 
 # Corruption rollback notice

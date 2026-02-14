@@ -93,6 +93,199 @@ tandem_require_claude() {
   fi
 }
 
+# ─── Session registry ────────────────────────────────────────────────────────
+
+TANDEM_SESSIONS_DIR="$HOME/.tandem/sessions"
+
+# Register a new session. Sets TANDEM_SESSION_ID.
+# Usage: tandem_session_register <project_path> [session_id]
+tandem_session_register() {
+  local project="$1"
+  local session_id="${2:-$$-$(date +%s)}"
+  local project_slug
+  project_slug=$(basename "$project")
+
+  TANDEM_SESSION_ID="$session_id"
+  export TANDEM_SESSION_ID
+
+  local session_dir="$TANDEM_SESSIONS_DIR/$session_id"
+  mkdir -p "$session_dir"
+
+  local branch=""
+  if git -C "$project" rev-parse --git-dir &>/dev/null 2>&1; then
+    branch=$(git -C "$project" --no-optional-locks branch --show-current 2>/dev/null)
+  fi
+
+  local state
+  state=$(jq -n \
+    --arg sid "$session_id" \
+    --arg pid "$$" \
+    --arg ppid "$PPID" \
+    --arg project "$project" \
+    --arg slug "$project_slug" \
+    --arg branch "$branch" \
+    --arg started "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg heartbeat "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{
+      session_id: $sid,
+      pid: ($pid | tonumber),
+      ppid: ($ppid | tonumber),
+      project: $project,
+      project_slug: $slug,
+      branch: $branch,
+      started: $started,
+      last_heartbeat: $heartbeat,
+      status: "active",
+      current_task: ""
+    }')
+
+  echo "$state" > "$session_dir/state.json"
+  tandem_log info "session registered: $session_id (project: $project_slug)"
+}
+
+# Update session heartbeat and optional fields.
+# Usage: tandem_session_heartbeat [task] [branch]
+tandem_session_heartbeat() {
+  local task="${1:-}"
+  local branch="${2:-}"
+  local session_id="${TANDEM_SESSION_ID:-}"
+  [ -z "$session_id" ] && return 0
+
+  local state_file="$TANDEM_SESSIONS_DIR/$session_id/state.json"
+  [ ! -f "$state_file" ] && return 0
+
+  local now
+  now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+  local updates=".last_heartbeat = \"$now\""
+  [ -n "$task" ] && updates="$updates | .current_task = \"$task\""
+  [ -n "$branch" ] && updates="$updates | .branch = \"$branch\""
+
+  local updated
+  updated=$(jq "$updates" "$state_file" 2>/dev/null)
+  [ -z "$updated" ] && return 0
+
+  echo "$updated" > "$state_file"
+}
+
+# Deregister a session (mark ended, then clean up directory).
+# Usage: tandem_session_deregister [session_id]
+tandem_session_deregister() {
+  local session_id="${1:-${TANDEM_SESSION_ID:-}}"
+  [ -z "$session_id" ] && return 0
+
+  local session_dir="$TANDEM_SESSIONS_DIR/$session_id"
+  [ ! -d "$session_dir" ] && return 0
+
+  # Mark as ended before removal (in case cleanup is delayed)
+  if [ -f "$session_dir/state.json" ]; then
+    local updated
+    updated=$(jq '.status = "ended"' "$session_dir/state.json" 2>/dev/null)
+    [ -n "$updated" ] && echo "$updated" > "$session_dir/state.json"
+  fi
+
+  rm -rf "$session_dir"
+  tandem_log info "session deregistered: $session_id"
+}
+
+# List active session directories (heartbeat < 5min, pid alive).
+# Outputs one session_id per line.
+tandem_active_sessions() {
+  [ ! -d "$TANDEM_SESSIONS_DIR" ] && return 0
+
+  local now
+  now=$(date +%s)
+  local max_age=300  # 5 minutes
+
+  for session_dir in "$TANDEM_SESSIONS_DIR"/*/; do
+    [ ! -d "$session_dir" ] && continue
+    local state_file="$session_dir/state.json"
+    [ ! -f "$state_file" ] && continue
+
+    local pid heartbeat_str status
+    pid=$(jq -r '.pid // empty' "$state_file" 2>/dev/null)
+    heartbeat_str=$(jq -r '.last_heartbeat // empty' "$state_file" 2>/dev/null)
+    status=$(jq -r '.status // empty' "$state_file" 2>/dev/null)
+
+    [ "$status" = "ended" ] && continue
+    [ -z "$pid" ] && continue
+
+    # Check if pid is still alive
+    if ! kill -0 "$pid" 2>/dev/null; then
+      continue
+    fi
+
+    # Check heartbeat freshness
+    if [ -n "$heartbeat_str" ]; then
+      local heartbeat_epoch
+      heartbeat_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$heartbeat_str" +%s 2>/dev/null || date -d "$heartbeat_str" +%s 2>/dev/null || echo 0)
+      local age=$((now - heartbeat_epoch))
+      if [ "$age" -gt "$max_age" ]; then
+        continue
+      fi
+    fi
+
+    basename "$session_dir"
+  done
+}
+
+# List active sessions for the same project (matching CWD).
+# Usage: tandem_sibling_sessions <project_path> [exclude_session_id]
+tandem_sibling_sessions() {
+  local project="$1"
+  local exclude="${2:-}"
+  [ ! -d "$TANDEM_SESSIONS_DIR" ] && return 0
+
+  for sid in $(tandem_active_sessions); do
+    [ "$sid" = "$exclude" ] && continue
+    local state_file="$TANDEM_SESSIONS_DIR/$sid/state.json"
+    [ ! -f "$state_file" ] && continue
+
+    local sess_project
+    sess_project=$(jq -r '.project // empty' "$state_file" 2>/dev/null)
+    if [ "$sess_project" = "$project" ]; then
+      echo "$sid"
+    fi
+  done
+}
+
+# Count active sessions.
+tandem_session_count() {
+  tandem_active_sessions | wc -l | tr -d ' '
+}
+
+# Clean up orphaned sessions (stale heartbeat + dead pid).
+tandem_cleanup_orphans() {
+  [ ! -d "$TANDEM_SESSIONS_DIR" ] && return 0
+
+  local now
+  now=$(date +%s)
+  local max_age=300
+
+  for session_dir in "$TANDEM_SESSIONS_DIR"/*/; do
+    [ ! -d "$session_dir" ] && continue
+    local state_file="$session_dir/state.json"
+    [ ! -f "$state_file" ] && continue
+
+    local pid heartbeat_str
+    pid=$(jq -r '.pid // empty' "$state_file" 2>/dev/null)
+    heartbeat_str=$(jq -r '.last_heartbeat // empty' "$state_file" 2>/dev/null)
+
+    [ -z "$pid" ] && { rm -rf "$session_dir"; continue; }
+
+    # Dead pid = orphan
+    if ! kill -0 "$pid" 2>/dev/null; then
+      local sid
+      sid=$(basename "$session_dir")
+      tandem_log info "cleaning orphaned session: $sid (pid $pid dead)"
+      rm -rf "$session_dir"
+      continue
+    fi
+
+    # Stale heartbeat + alive pid = skip (might just be idle)
+  done
+}
+
 # ─── .env loading ────────────────────────────────────────────────────────────
 
 [ -f "$HOME/.tandem/.env" ] && source "$HOME/.tandem/.env"
