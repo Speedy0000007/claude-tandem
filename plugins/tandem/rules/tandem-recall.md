@@ -52,3 +52,26 @@ When writing directly to MEMORY.md, prefix entries:
 Include (observed: YYYY-MM-DD) on MEMORY.md entries to aid temporal reasoning during compaction.
 
 **MEMORY.md:** Write patterns worth persisting to MEMORY.md with [P1]/[P2]/[P3] priority and (observed: YYYY-MM-DD) date. The SessionEnd hook compacts to stay under 200 lines.
+
+## CLAUDE.md promotion
+
+The data funnel flows: progress.md → MEMORY.md → CLAUDE.md. Each level is less contextual and more instructional.
+
+- **progress.md** — what's happening right now, high context, ephemeral
+- **MEMORY.md** — what we've learned recently, project knowledge, compacted regularly
+- **CLAUDE.md** — permanent knowledge and instructions, biased toward directives. Commands, gotchas, do's and don'ts, conventions, and key facts about the project. The culmination of everything learned across sessions, refined into guidance for future agents.
+
+Proactively promote stable [P1] patterns from MEMORY.md to CLAUDE.md. Prefer instructions over observations: distill knowledge into rules, constraints, and conventions where possible. Pure facts (e.g., "we use Postgres", "the API is REST") belong too, but the bulk should be actionable.
+
+**What qualifies:**
+- Gotchas that burned time and should never recur (e.g., "macOS grep doesn't support `-oP`")
+- Conventions confirmed across sessions (e.g., "always use Conventional Commits")
+- Specific commands or patterns to use or avoid
+- Architectural constraints that shape how to build
+
+**Which CLAUDE.md to target:**
+- **Global** (applies across all projects) → `~/.claude/CLAUDE.md`
+- **Project** (applies to this repo) → project root `CLAUDE.md`
+- **Subdomain** (cohesive project area, e.g., frontend, API, database) → nested `CLAUDE.md` in that directory. Only create when the subdomain has enough distinct conventions to warrant it.
+
+When promoting, remove or downgrade the MEMORY.md entry. CLAUDE.md is the permanent instruction set; MEMORY.md is the working buffer.
