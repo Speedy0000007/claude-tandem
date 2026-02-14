@@ -13,9 +13,10 @@ progress.md has frontmatter plus two body parts:
 
 ```yaml
 ---
-framework: tandem
+framework: default
+project: tandem
 type: session-progress
-project: <project-directory-name>
+target: <project-directory-name>
 depends_on: []
 feeds: [MEMORY.md]
 ---
