@@ -304,6 +304,20 @@ fi
 
 tandem_header "$MEMORY_DIR"
 
+# --- User profile injection (lower priority than CLAUDE.md, MEMORY.md, git) ---
+
+if [ -f "$PROFILE_DIR/USER.md" ]; then
+  PROFILE_LINES=$(wc -l < "$PROFILE_DIR/USER.md" | tr -d ' ')
+  # Only inject if profile has real content (not just the template)
+  if [ "$PROFILE_LINES" -gt 15 ]; then
+    echo ""
+    echo "<user-profile>"
+    cat "$PROFILE_DIR/USER.md"
+    echo "</user-profile>"
+    echo ""
+  fi
+fi
+
 # --- Detail lines (plain, no logo) ---
 
 # CWD is not a git root — memory may land in the wrong project

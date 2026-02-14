@@ -353,7 +353,19 @@ tandem_llm_call() {
 
   if [ "$backend" = "claude" ]; then
     local result
-    result=$(echo "$prompt" | claude -p --model "$model" --max-budget-usd "$budget" --system-prompt "" --tools "" 2>/dev/null)
+    # --setting-sources "" prevents loading hooks/rules/CLAUDE.md that can
+    # contaminate the LLM response (e.g. thirdeye-meta instructions causing
+    # the model to try invoking skills instead of executing the prompt).
+    result=$(echo "$prompt" | claude -p \
+      --model "$model" \
+      --max-budget-usd "$budget" \
+      --system-prompt "" \
+      --tools "" \
+      --setting-sources "" \
+      --disable-slash-commands \
+      --no-chrome \
+      --no-session-persistence \
+      2>/dev/null)
     local rc=$?
 
     if [ $rc -ne 0 ] || [ -z "$result" ]; then

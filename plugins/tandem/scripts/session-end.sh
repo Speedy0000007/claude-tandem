@@ -379,30 +379,38 @@ grow_extract() {
 
   # Build the extraction prompt
   PROMPT=$(cat <<PROMPT_EOF
-You maintain USER.md, a lightweight profile of this user's technical understanding.
-It helps a mentoring system know what the user already understands (so it does not repeat itself) and where growth edges exist (for targeted nudges).
+You maintain USER.md, a profile of this user: who they are, what they're exceptionally good at, how they think and work, and where they're growing.
 
-This is a PERSONAL PROFILE of a human user. It is NOT a knowledge base, NOT a framework document, NOT internal reasoning or planning output.
+This is a PERSONAL PROFILE of a human user. It is NOT a knowledge base, NOT a framework document, NOT internal reasoning or planning output. It helps an AI assistant understand WHO they are working with so they can leverage the user's strengths and calibrate their collaboration style.
 
-Keep it under 80 lines. The file MUST follow this exact structure:
+Keep it under 150 lines. The file MUST follow this exact structure:
 
 # User Profile
 
-## Career Context
-(role, stack, strengths, goals)
+## Core Identity
+(one-paragraph summary: who they are, what drives them, how they think)
 
-## Technical Understanding
-(what they know well)
+## Core Superpowers
+(what they're exceptionally good at -- the strengths to actively leverage)
+
+## Domain Expertise
+(technical and business domains they know deeply)
+
+## Working Style
+(how they think, communicate, and prefer to work)
+
+## Values & Principles
+(what they care about -- shapes how to frame recommendations and tradeoffs)
 
 ## Growth Edges
-(where they are building depth)
+(where they're building depth -- nudge targets, don't repeat what they already know)
 
 Rules:
-- Only update when the session reveals something about the USER's understanding level, not when a task was merely completed
+- Only update when the session reveals something about the USER as a person: their understanding, preferences, strengths, or growth areas
 - Do not add project-specific details, debugging notes, implementation mechanics, or framework/system design content
-- This is about the PERSON, not about the codebase or tools. Write about what THEY know and where THEY are growing.
+- This is about the PERSON, not about the codebase or tools
 - Merge new observations with existing content. Preserve what is already there unless it is clearly outdated
-- If the session reveals career context (role, stack, goals), update the Career Context section
+- Core Superpowers and Working Style are the highest-signal sections. Update these when you observe the user doing something that reveals HOW they think or what they're great at
 - Pay special attention to recurring themes (provided below) -- if a theme keeps appearing but the profile has thin coverage, that is a high-priority area to capture
 - If you spot a genuine learning gap worth highlighting, output a NUDGE line before the profile: NUDGE: [friendly one-sentence observation]
 
