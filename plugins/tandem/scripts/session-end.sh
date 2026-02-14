@@ -475,6 +475,19 @@ checkpoint_commit() {
   progress=$(tail -100 "$MEMORY_DIR/progress.md" 2>/dev/null)
   [ -z "$progress" ] && { tandem_log debug "no progress content for checkpoint"; return 0; }
 
+  # Extract current task from working state for a meaningful subject line
+  local task_desc
+  task_desc=$(sed -n 's/^\*\*Current task:\*\* *//p' "$MEMORY_DIR/progress.md" 2>/dev/null | head -1)
+  if [ -z "$task_desc" ]; then
+    task_desc="session work in progress"
+  fi
+  # Lowercase first char, strip trailing period
+  task_desc=$(echo "$task_desc" | sed 's/^\(.\)/\L\1/; s/\.$//')
+  # Truncate to keep subject under 72 chars (claude(checkpoint): = 20 chars + space)
+  if [ ${#task_desc} -gt 51 ]; then
+    task_desc="${task_desc:0:51}"
+  fi
+
   local body
   body=$(printf '%s\n\nTandem-Auto-Commit: true' "$progress")
 
@@ -486,7 +499,7 @@ checkpoint_commit() {
   else
     tandem_log info "checkpoint: committing staged changes"
     git -C "$CWD" commit \
-      -m "$(printf 'chore(tandem): session checkpoint\n\n%s' "$body")" 2>/dev/null || {
+      -m "$(printf 'claude(checkpoint): %s\n\n%s' "$task_desc" "$body")" 2>/dev/null || {
       tandem_log warn "checkpoint commit failed"
       return 1
     }
@@ -549,9 +562,10 @@ recall_compact && RECALL_STATUS=1          # Phase 1: compact MEMORY.md
 grow_extract && GROW_STATUS=1              # Phase 2: extract learnings to profile
 global_activity && GLOBAL_STATUS=1         # Phase 3: cross-project log
 
-# Only delete progress.md if both critical phases succeeded
+# Keep progress.md for next session continuity (Working State survives,
+# gets overwritten when the next session writes a fresh state).
+# Only append failure info if compaction failed.
 if [ "$RECALL_STATUS" -eq 1 ] && [ "$GROW_STATUS" -eq 1 ]; then
-  rm -f "$MEMORY_DIR/progress.md"
   tandem_log info "session end complete (recall: ok, grow: ok)"
 else
   echo "" >> "$MEMORY_DIR/progress.md"

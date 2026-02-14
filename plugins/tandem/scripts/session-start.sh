@@ -442,14 +442,16 @@ fi
 # Tandem checkpoint detection
 if git -C "$CWD" rev-parse --git-dir &>/dev/null; then
   LAST_MSG=$(git -C "$CWD" log -1 --format="%s" 2>/dev/null)
-  if [[ "$LAST_MSG" == "chore(tandem): session checkpoint" ]] || \
+  if [[ "$LAST_MSG" == claude\(checkpoint\):* ]] || \
+     [[ "$LAST_MSG" == "chore(tandem): session checkpoint" ]] || \
      [[ "$LAST_MSG" == "chore(tandem): session context" ]]; then
     # Count consecutive auto-commits from HEAD
     AC_COUNT=0
     while true; do
       AC_SHA=$(git -C "$CWD" rev-parse "HEAD~${AC_COUNT}" 2>/dev/null) || break
       AC_SUBJ=$(git -C "$CWD" log -1 --format="%s" "$AC_SHA" 2>/dev/null)
-      if [[ "$AC_SUBJ" == "chore(tandem): session checkpoint" ]] || \
+      if [[ "$AC_SUBJ" == claude\(checkpoint\):* ]] || \
+         [[ "$AC_SUBJ" == "chore(tandem): session checkpoint" ]] || \
          [[ "$AC_SUBJ" == "chore(tandem): session context" ]] || \
          git -C "$CWD" log -1 --format='%B' "$AC_SHA" 2>/dev/null | grep -q 'Tandem-Auto-Commit: true'; then
         AC_COUNT=$((AC_COUNT + 1))

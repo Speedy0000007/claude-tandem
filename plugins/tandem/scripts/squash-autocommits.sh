@@ -45,6 +45,7 @@ is_autocommit() {
   # Fallback: subject match
   local subject
   subject=$(git -C "$CWD" log -1 --format='%s' "$sha" 2>/dev/null)
+  [[ "$subject" == claude\(checkpoint\):* ]] && return 0
   [ "$subject" = "chore(tandem): session checkpoint" ] && return 0
   return 1
 }
