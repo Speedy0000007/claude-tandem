@@ -54,7 +54,25 @@ tandem_print() {
   echo "${_TANDEM_LOGO} ~ $1"
 }
 
+# Compact relative age string: "3m", "2h", "5d", or "-" if missing.
+# Usage: _tandem_relative_age <epoch_seconds>
+_tandem_relative_age() {
+  local mtime="$1"
+  [ -z "$mtime" ] && { echo "-"; return; }
+  local now age
+  now=$(date +%s)
+  age=$((now - mtime))
+  if [ "$age" -lt 60 ]; then echo "<1m"
+  elif [ "$age" -lt 3600 ]; then echo "$((age / 60))m"
+  elif [ "$age" -lt 86400 ]; then echo "$((age / 3600))h"
+  elif [ "$age" -lt 2592000 ]; then echo "$((age / 86400))d"
+  else echo ">30d"
+  fi
+}
+
+# Usage: tandem_header [memory_dir]
 tandem_header() {
+  local memory_dir="${1:-}"
   local version stats sessions clarifications compactions updates
   version=$(jq -r '.version // "?"' "$PLUGIN_ROOT/.claude-plugin/plugin.json" 2>/dev/null || echo "?")
   if [ -f "$HOME/.tandem/state/stats.json" ]; then
@@ -66,7 +84,22 @@ tandem_header() {
   else
     sessions=0 clarifications=0 compactions=0 updates=0
   fi
-  echo "${_TANDEM_LOGO} ~ Tandem v${version} · ▷ ${sessions} · ✎ ${clarifications} · ↻ ${compactions} · ◆ ${updates}"
+
+  local line="${_TANDEM_LOGO} ~ Tandem v${version} · ▷ ${sessions} · ✎ ${clarifications} · ↻ ${compactions} · ◆ ${updates}"
+
+  # Append file ages if memory_dir is known
+  if [ -n "$memory_dir" ]; then
+    local mem_age="-" prog_age="-"
+    if [ -f "$memory_dir/MEMORY.md" ]; then
+      mem_age=$(_tandem_relative_age "$(tandem_file_mtime "$memory_dir/MEMORY.md")")
+    fi
+    if [ -f "$memory_dir/progress.md" ]; then
+      prog_age=$(_tandem_relative_age "$(tandem_file_mtime "$memory_dir/progress.md")")
+    fi
+    line="${line} · mem:${mem_age} prog:${prog_age}"
+  fi
+
+  echo "$line"
 }
 
 # ─── Cross-platform helpers ───────────────────────────────────────────────────

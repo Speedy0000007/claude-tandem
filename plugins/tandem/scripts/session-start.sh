@@ -302,9 +302,15 @@ fi
 
 # --- Header (always first, always output) ---
 
-tandem_header
+tandem_header "$MEMORY_DIR"
 
 # --- Detail lines (plain, no logo) ---
+
+# CWD is not a git root — memory may land in the wrong project
+if ! git -C "$CWD" rev-parse --show-toplevel &>/dev/null || \
+   [ "$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null)" != "$CWD" ]; then
+  echo "Note: CWD is not a git root. Memory is scoped to $(basename "$CWD")/. Start Claude Code from your project root for accurate memory scoping."
+fi
 
 # First run welcome
 if [ "$FIRST_RUN" -eq 1 ]; then
