@@ -3,11 +3,23 @@
 
 Maintain progress.md in your auto-memory directory as a hybrid working state + session log. The Tandem SessionEnd hook reads this file.
 
-**Init:** Create progress.md on your first significant action if it doesn't exist. Start with the Working State template below.
+**Init:** Create progress.md on your first significant action if it doesn't exist. Start with the frontmatter and Working State template below.
 
 ## Structure
 
-progress.md has two parts:
+progress.md has frontmatter plus two body parts:
+
+### Frontmatter
+
+```yaml
+---
+framework: tandem
+type: session-progress
+project: <project-directory-name>
+depends_on: []
+feeds: [MEMORY.md]
+---
+```
 
 ### 1. Working State (rewrite as context changes)
 
