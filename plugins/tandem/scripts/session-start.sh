@@ -341,7 +341,6 @@ if [ -n "$SIBLINGS" ]; then
     if [ -f "$local_state" ]; then
       s_branch=$(jq -r '.branch // "?"' "$local_state" 2>/dev/null)
       s_task=$(jq -r '.current_task // ""' "$local_state" 2>/dev/null)
-      s_heartbeat=$(jq -r '.last_heartbeat // ""' "$local_state" 2>/dev/null)
       s_info="  - $sid: $s_branch"
       [ -n "$s_task" ] && s_info="$s_info, $s_task"
       echo "$s_info"

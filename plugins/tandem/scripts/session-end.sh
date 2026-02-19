@@ -481,7 +481,6 @@ Review the session and update the profile now."
 
   if echo "$CONTENT" > "$TMPFILE" && [ -s "$TMPFILE" ]; then
     mv "$TMPFILE" "$TARGET"
-    UPDATED_FILES="USER.md"
     tandem_log info "profile updated: USER.md"
   else
     tandem_log warn "failed to write USER.md"
