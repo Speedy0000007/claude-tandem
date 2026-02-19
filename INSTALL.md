@@ -40,8 +40,8 @@ Before installing Tandem, ensure you have:
 Tandem is distributed through the Claude Code plugin marketplace:
 
 ```bash
-/plugin marketplace add github.com/jonny981/claude-tandem
-/plugin install tandem
+/plugin marketplace add jonny981/claude-tandem
+/plugin install tandem@tandem-marketplace
 ```
 
 Claude Code will:
@@ -218,7 +218,7 @@ This ensures your rules stay in sync with the plugin without manual intervention
 To remove Tandem:
 
 ```bash
-/plugin uninstall tandem
+/plugin uninstall tandem@tandem-marketplace
 ```
 
 This removes the plugin directory but **does not** delete provisioned files. To fully clean up:
@@ -250,8 +250,8 @@ ls ~/.claude/plugins/tandem/
 
 If the directory is empty or missing, reinstall:
 ```bash
-/plugin uninstall tandem
-/plugin install tandem
+/plugin uninstall tandem@tandem-marketplace
+/plugin install tandem@tandem-marketplace
 ```
 
 ### SessionStart hook not firing

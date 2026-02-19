@@ -44,10 +44,10 @@ See [INSTALL.md](INSTALL.md) for detailed setup instructions.
 
 ```bash
 # Add the marketplace
-/plugin marketplace add github.com/jonny981/claude-tandem
+/plugin marketplace add jonny981/claude-tandem
 
 # Install
-/plugin install tandem
+/plugin install tandem@tandem-marketplace
 ```
 
 Then start your first session:
@@ -280,7 +280,7 @@ See [CONFIGURATION.md](CONFIGURATION.md) for advanced options, hook input schema
 **Remove plugin:**
 
 ```bash
-/plugin uninstall tandem
+/plugin uninstall tandem@tandem-marketplace
 ```
 
 This removes the plugin (skills, hooks, scripts). Your data is preserved.

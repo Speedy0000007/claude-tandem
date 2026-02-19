@@ -33,7 +33,7 @@ Common issues and solutions for the Tandem Claude Code plugin.
    Should output status indicators or provision messages.
 
 **Solutions:**
-- Reinstall plugin: `/plugin uninstall tandem && /plugin install tandem`
+- Reinstall plugin: `/plugin uninstall tandem@tandem-marketplace && /plugin install tandem@tandem-marketplace`
 - Check Claude Code version (hooks require recent version)
 - Review plugin installation logs in Claude Code
 
