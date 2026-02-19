@@ -606,6 +606,39 @@ Entry number ${i}
   [ -f "$HOME/.tandem/memory/global.md" ]
 }
 
+@test "phase 3: deduplicates same-project same-day entry" {
+  create_progress "updated work"
+  mkdir -p "$HOME/.tandem/memory"
+  # Pre-populate with an entry for the same project and today's date
+  local today
+  today=$(date +%Y-%m-%d)
+  cat > "$HOME/.tandem/memory/global.md" <<EOF
+## ${today} — project
+old summary from earlier session
+
+## 2025-01-01 — other-project
+Other project entry
+
+EOF
+
+  _install_mock_claude_dispatch \
+    "compaction" "recall-compact-good.txt" \
+    "USER.md" "grow-extract-none.txt"
+
+  run_worker
+
+  assert_success
+  # Should still have exactly 2 entries (replaced, not added)
+  local entry_count
+  entry_count=$(grep -c '^## ' "$HOME/.tandem/memory/global.md")
+  [ "$entry_count" -eq 2 ]
+  # Old summary should be gone
+  run cat "$HOME/.tandem/memory/global.md"
+  refute_output --partial "old summary from earlier session"
+  # New summary should be present
+  assert_output --partial "updated work"
+}
+
 # ─── Orchestration ──────────────────────────────────────────────────────────
 
 @test "orchestration: both recall + grow succeed, progress.md deleted" {

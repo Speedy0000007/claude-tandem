@@ -575,6 +575,20 @@ ${SUMMARY}
 
   mkdir -p "$GLOBAL_DIR"
 
+  # Dedup: if the most recent entry is for the same project+date, replace it
+  DEDUP_HEADER="## ${TODAY} — ${PROJECT_NAME}"
+  if [ -f "$GLOBAL_FILE" ]; then
+    FIRST_HEADER=$(head -1 "$GLOBAL_FILE")
+    if [ "$FIRST_HEADER" = "$DEDUP_HEADER" ]; then
+      # Strip the existing entry (everything before the next ## header)
+      EXISTING_TAIL=$(awk 'NR==1{next} /^## /{found=1} found{print}' "$GLOBAL_FILE")
+    else
+      EXISTING_TAIL=$(cat "$GLOBAL_FILE")
+    fi
+  else
+    EXISTING_TAIL=""
+  fi
+
   # Prepend new entry and cap at 30 entries
   TMPFILE=$(mktemp "$GLOBAL_DIR/global.md.XXXXXX")
   if [ -z "$TMPFILE" ] || [ ! -f "$TMPFILE" ]; then
@@ -584,7 +598,7 @@ ${SUMMARY}
 
   {
     printf '%s\n' "$ENTRY"
-    [ -f "$GLOBAL_FILE" ] && cat "$GLOBAL_FILE"
+    [ -n "$EXISTING_TAIL" ] && printf '%s\n' "$EXISTING_TAIL"
   } | awk '
     /^## / { count++ }
     count <= 30 { print }
