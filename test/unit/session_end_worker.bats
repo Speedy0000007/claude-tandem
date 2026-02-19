@@ -67,7 +67,7 @@ run_worker() {
   assert_success
   # Verify the commit was created
   run git -C "$TEST_CWD" log -1 --pretty=format:%s
-  assert_output "chore(tandem): session checkpoint"
+  assert_output --partial "claude(checkpoint):"
 }
 
 @test "phase 0: commit body includes progress.md content" {
@@ -641,8 +641,14 @@ EOF
 
 # ─── Orchestration ──────────────────────────────────────────────────────────
 
-@test "orchestration: both recall + grow succeed, progress.md deleted" {
-  create_progress "session notes"
+@test "orchestration: both recall + grow succeed, progress.md truncated to working state" {
+  create_progress "<!-- working-state:start -->
+## Working State
+**Current task:** session notes
+<!-- working-state:end -->
+
+## Session Log
+- did some work"
   _install_mock_claude_dispatch \
     "compaction" "recall-compact-good.txt" \
     "USER.md" "grow-extract-none.txt"
@@ -650,7 +656,11 @@ EOF
   run_worker
 
   assert_success
-  [ ! -f "$TEST_MEMORY_DIR/progress.md" ]
+  # progress.md should still exist but session log should be stripped
+  [ -f "$TEST_MEMORY_DIR/progress.md" ]
+  run cat "$TEST_MEMORY_DIR/progress.md"
+  assert_output --partial "working-state:start"
+  refute_output --partial "Session Log"
 }
 
 @test "orchestration: recall fails, grow succeeds, progress.md preserved with failure note" {

@@ -112,7 +112,7 @@ MOCK_EOF
   local captured
   captured=$(cat "$HOME/.tandem/state/captured_compaction.txt")
   [[ "$captured" == *"observed: YYYY-MM-DD"* ]]
-  [[ "$captured" == *"Temporal context"* ]]
+  [[ "$captured" == *"Temporal metadata"* ]]
 }
 
 @test "priority: MEMORY.md preserves priority markers from LLM response" {

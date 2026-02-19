@@ -379,9 +379,9 @@ grow_extract() {
 
   # Build the extraction prompt
   PROMPT=$(cat <<PROMPT_EOF
-You maintain USER.md, a profile of this user: who they are, what they're exceptionally good at, how they think and work, and where they're growing.
+You maintain USER.md, a profile of this user: who they are, what they excel at, how they think and work, and where they are growing.
 
-This is a PERSONAL PROFILE of a human user. It is NOT a knowledge base, NOT a framework document, NOT internal reasoning or planning output. It helps an AI assistant understand WHO they are working with so they can leverage the user's strengths and calibrate their collaboration style.
+This is a PERSONAL PROFILE of a human user. It is NOT a knowledge base, NOT a framework document, NOT internal reasoning or planning output. It helps an AI assistant understand WHO they are working with so it can leverage the user strengths and calibrate collaboration style.
 
 Keep it under 150 lines. The file MUST follow this exact structure:
 
@@ -391,7 +391,7 @@ Keep it under 150 lines. The file MUST follow this exact structure:
 (one-paragraph summary: who they are, what drives them, how they think)
 
 ## Core Superpowers
-(what they're exceptionally good at -- the strengths to actively leverage)
+(what they excel at -- the strengths to actively leverage)
 
 ## Domain Expertise
 (technical and business domains they know deeply)
@@ -403,14 +403,14 @@ Keep it under 150 lines. The file MUST follow this exact structure:
 (what they care about -- shapes how to frame recommendations and tradeoffs)
 
 ## Growth Edges
-(where they're building depth -- nudge targets, don't repeat what they already know)
+(where they are building depth -- nudge targets, do not repeat what they already know)
 
 Rules:
 - Only update when the session reveals something about the USER as a person: their understanding, preferences, strengths, or growth areas
 - Do not add project-specific details, debugging notes, implementation mechanics, or framework/system design content
 - This is about the PERSON, not about the codebase or tools
 - Merge new observations with existing content. Preserve what is already there unless it is clearly outdated
-- Core Superpowers and Working Style are the highest-signal sections. Update these when you observe the user doing something that reveals HOW they think or what they're great at
+- Core Superpowers and Working Style are the highest-signal sections. Update these when you observe the user doing something that reveals HOW they think or what they are great at
 - Pay special attention to recurring themes (provided below) -- if a theme keeps appearing but the profile has thin coverage, that is a high-priority area to capture
 - If you spot a genuine learning gap worth highlighting, output a NUDGE line before the profile: NUDGE: [friendly one-sentence observation]
 
@@ -457,8 +457,9 @@ Review the session and update the profile now."
   NUDGE=$(echo "$RESULT" | sed -n 's/^NUDGE: *//p' | head -1)
   CONTENT=$(echo "$RESULT" | sed '/^NUDGE: /d')
 
-  # Strip code fences
-  CONTENT=$(echo "$CONTENT" | sed '/^```/d')
+  # Strip code fences (printf to avoid bash 3.2 backtick parse issue in $())
+  BT=$(printf '\x60\x60\x60')
+  CONTENT=$(echo "$CONTENT" | sed "/^${BT}/d")
 
   # Validate: first heading must be "# User Profile" and at least one expected section present
   FIRST_HEADING=$(echo "$CONTENT" | grep -m1 "^# " | sed 's/^ *//')
@@ -502,7 +503,7 @@ Review the session and update the profile now."
       TOTAL_LINES=$(wc -l < "$TARGET" | tr -d ' ')
     fi
 
-    UPDATED_STATS=$(jq --arg lines "$TOTAL_LINES" '.profile_updates += 1 | .profile_total_lines = ($lines | tonumber)' "$STATS_FILE")
+    UPDATED_STATS=$(jq --argjson lines "$TOTAL_LINES" '.profile_updates += 1 | .profile_total_lines = $lines' "$STATS_FILE")
     TMPSTATS=$(mktemp "$STATS_FILE.XXXXXX")
     if [ -n "$TMPSTATS" ] && [ -f "$TMPSTATS" ]; then
       if echo "$UPDATED_STATS" > "$TMPSTATS" && [ -s "$TMPSTATS" ]; then
@@ -547,8 +548,9 @@ checkpoint_commit() {
     return 0
   else
     tandem_log info "checkpoint: committing staged changes"
-    git -C "$CWD" commit \
-      -m "$(printf 'claude(checkpoint): %s\n\n%s' "$task_desc" "$body")" 2>/dev/null || {
+    local commit_msg
+    commit_msg=$(printf "claude(checkpoint): %s\n\n%s" "$task_desc" "$body")
+    git -C "$CWD" commit -m "$commit_msg" 2>/dev/null || {
       tandem_log warn "checkpoint commit failed"
       return 1
     }
